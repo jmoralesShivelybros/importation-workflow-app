@@ -126,6 +126,11 @@ class FolderManager:
         week_folder = f"semana {week_num}"
         return os.path.join(self.importacion_base_path, week_folder, "Cartas")
 
+    def get_master_folder_path(self, week_num):
+        """Devuelve la ruta a la carpeta 'master' para una semana específica."""
+        week_folder = f"semana {week_num}"
+        return os.path.join(self.importacion_base_path, week_folder, "master")
+
     def get_certificados_folder_path(self):
         """Devuelve la ruta a la carpeta 'Certificados' de exportación."""
         return os.path.join(self.exportacion_base_path, "Certificados")

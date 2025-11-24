@@ -18,6 +18,7 @@ from folder_manager import FolderManager
 from importation_window import ImportationWindow
 from norm_letter_window import NormLetterWindow
 from exportation_window import ExportationWindow
+from master_window import MasterWindow # Importa la nueva ventana
 
 
 def get_base_path():
@@ -161,6 +162,7 @@ class ImportationApp(ttk.Window):
             ("Generar Importación(Beta)", self.extract_pdf_data, "primary"),
             ("Generar Exportación", self.open_exportation_window, "info"),
             ("Generar Carta de Norma", self.generate_norm_letter, "success"),
+            ("Aplicar Registros al Archivo master", self.open_master_update_window, "warning"),
         ]
 
         for text, command, style in actions:
@@ -328,17 +330,22 @@ class ImportationApp(ttk.Window):
             return
         self.open_child_window(NormLetterWindow)
 
+    def open_master_update_window(self):
+        if not self.selected_week.get():
+            messagebox.showwarning("Advertencia", "Por favor selecciona un número de semana")
+            return
+        self.open_child_window(MasterWindow) # Llama a la nueva ventana
+
     def open_child_window(self, WindowClass):
         # Oculta la ventana principal y abre la secundaria
         self.withdraw()
-        self.child_window = WindowClass(self)
-        self._center_window(self.child_window) # Centramos la ventana hija
-        self.child_window.protocol("WM_DELETE_WINDOW", self.on_child_close)
+        child_window = WindowClass(self)
+        self._center_window(child_window) # Centramos la ventana hija
+        child_window.protocol("WM_DELETE_WINDOW", lambda: self.on_child_close(child_window))
 
-    def on_child_close(self):
-        if self.child_window:
-            self.child_window.destroy()
-            self.child_window = None
+    def on_child_close(self, child_window):
+        if child_window:
+            child_window.destroy()
         self.deiconify()
 
     def _center_window(self, window=None):
