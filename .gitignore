@@ -1,0 +1,22 @@
+# Archivos y carpetas de cache de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Carpetas de entornos virtuales
+.venv/
+venv/
+env/
+.env/
+
+# Carpetas de distribución y compilación de PyInstaller
+dist/
+build/
+*.spec
+
+# Archivos de configuración de VSCode
+.vscode/
+
+# Archivos comprimidos
+*.zip
