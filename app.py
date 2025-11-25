@@ -18,7 +18,6 @@ from folder_manager import FolderManager
 from importation_window import ImportationWindow
 from norm_letter_window import NormLetterWindow
 from exportation_window import ExportationWindow
-from master_window import MasterWindow # Importa la nueva ventana
 
 
 def get_base_path():
@@ -162,7 +161,7 @@ class ImportationApp(ttk.Window):
             ("Generar Importación(Beta)", self.extract_pdf_data, "primary"),
             ("Generar Exportación", self.open_exportation_window, "info"),
             ("Generar Carta de Norma", self.generate_norm_letter, "success"),
-            ("Aplicar Registros al Archivo master", self.open_master_update_window, "warning"),
+            #("Aplicar Registros al Archivo master*(en proceso, no usar)", self.open_master_update_window, "warning"),
         ]
 
         for text, command, style in actions:
