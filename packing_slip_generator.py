@@ -1,3 +1,4 @@
+from pathlib import Path # Esta línea es crucial
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import (

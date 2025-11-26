@@ -1,6 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 block_cipher = None
 
 
@@ -9,11 +8,11 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('vendor', 'vendor'),
         ('firma_cartas', 'firma_cartas'),
-        ('test_files', 'test_files')
+        ('vendor', 'vendor'),
+        ('config.json', '.')
     ],
-    hiddenimports=['pandas._libs.tslibs.timedeltas', 'ttkbootstrap.themes'],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -23,21 +22,25 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
-pyz = PYZ(a.pure)
+pyz = PYZ(a.pure, cipher=block_cipher)
 
 exe = EXE(
     pyz,
     a.scripts,
     [],
+    exclude_binaries=True,
     name='SistemaLogistica',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    runtime_tmpdir=None,
-    console=False, # True para depurar, False para la versión final
-    disable_windowed_traceback=False, # Mantenlo en False para ver errores
-    icon=None, # Aquí puedes poner la ruta a un archivo .ico
+    upx=False,          # Desactiva la compresión UPX para reducir falsos positivos.
+    console=False,      # False para aplicaciones con GUI (--windowed).
+    onefile=False,      # CAMBIO CLAVE: Genera una carpeta en lugar de un solo .exe.
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
 )
 coll = COLLECT(
     exe,
@@ -45,7 +48,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,          # También desactivamos UPX en la fase de recolección.
     upx_exclude=[],
     name='SistemaLogistica',
 )

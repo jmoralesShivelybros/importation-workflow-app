@@ -25,8 +25,8 @@ DIRECCION_ORIGEN = (
 def get_base_path():
     """ Obtiene la ruta base para encontrar los recursos, tanto en desarrollo como en el ejecutable."""
     if getattr(sys, 'frozen', False):
-        # Si la aplicación está "congelada" (es un .exe), la ruta base es el directorio del ejecutable
-        return os.path.dirname(sys.executable)
+        # Si la aplicación está "congelada" (es un .exe), la base es el directorio temporal _MEIPASS
+        return sys._MEIPASS
     else:
         # Si está en modo de desarrollo, la ruta base es el directorio del script actual
         return os.path.dirname(os.path.abspath(__file__))
@@ -581,16 +581,18 @@ class ExportationWindow(ttk.Toplevel):
 
             print("Datos para el Packing List:", packing_data)  # Verifica los datos enviados al Packing List
 
-            # Ruta donde se guardará el Packing List
-            base_path = get_base_path()
-            output_dir = Path(base_path) / "exportacion" / "historial_archivos"
-            output_dir.mkdir(parents=True, exist_ok=True)  # Crear el directorio si no existe
-            packing_list_path = output_dir / "packing_slip.pdf"
+            # --- CORRECCIÓN: Usar la carpeta de la semana de exportación para el Packing List temporal ---
+            current_year = self.parent.folder_manager.current_year
+            week_num = self.parent.selected_week.get()
+            output_folder = os.path.join(self.parent.folder_manager.exportacion_base_path, current_year, f"semana {week_num}")
+            os.makedirs(output_folder, exist_ok=True)
+            
+            packing_list_path = os.path.join(output_folder, "packing_slip_temp.pdf")
 
             # Generar el Packing List
-            generate_packing_slip(packing_data, str(packing_list_path))
+            generate_packing_slip(packing_data, packing_list_path)
             pdfs_to_merge.append(str(packing_list_path))
-            self.log_message(f"Packing List generado y agregado: {packing_list_path.name}")
+            self.log_message(f"Packing List generado y agregado: {os.path.basename(packing_list_path)}")
         except Exception as e:
             self.log_message(f"Error generando Packing List: {e}")
             messagebox.showerror("Error Packing List", f"Ocurrió un error al generar el Packing List: {e}")

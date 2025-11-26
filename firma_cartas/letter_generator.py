@@ -1,6 +1,6 @@
-from datetime import datetime
 import os
 from reportlab.lib.pagesizes import letter
+from datetime import datetime
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_RIGHT, TA_CENTER
@@ -127,24 +127,18 @@ def _add_signature_block(elements, styles):
     elements.append(Paragraph("Ma. Elena Moreno Lopez", styles['CenterAlign']))
     elements.append(Paragraph("Representante Legal", styles['CenterAlign']))
 
-def _build_default_pdf(elements, styles, template_name, template_content, invoices_str):
+def _build_default_pdf(elements, styles, template_content, invoices_str):
     """
     CONSTRUCTOR POR DEFECTO: Construye un PDF simple a partir de una plantilla de texto.
     Ideal para cartas que no necesitan formato complejo.
 
     Args:
-        template_name (str): El nombre de la plantilla.
         template_content (str): El contenido ya leído del archivo de plantilla.
         invoices_str (str): Cadena con las facturas.
     """
 
-    # Reemplazar placeholders
-    content = template_content.replace("[FECHA_ACTUAL]", datetime.now().strftime("%d de %B de %Y"))
-    content = content.replace("[NUMEROS_FACTURA]", invoices_str.replace(",", ", "))
-    content = content.replace("[NOMBRE_NORMA]", template_name)
-
     # Añadir cada línea como un párrafo
-    for line in content.split('\n'):
+    for line in template_content.split('\n'):
         # Procesamos solo hasta antes del bloque de la firma, que se añadirá después
         if "Shivelybros Mexico" in line:
             break
@@ -201,6 +195,11 @@ def generate_letter_pdf(template_name, invoices_str, output_path):
         doc.build(elements)
         return
 
+    # Reemplazar placeholders comunes en el contenido de la plantilla
+    template_content = template_content.replace("[FECHA_ACTUAL]", datetime.now().strftime("%d de %B de %Y"))
+    template_content = template_content.replace("[NUMEROS_FACTURA]", invoices_str.replace(",", ", "))
+    template_content = template_content.replace("[NOMBRE_NORMA]", template_name)
+
     # Marcadores que identifican las plantillas con tabla
     table_marker_keyword1 = 'factura y proveedor:'
     table_marker_keyword2 = 'mercancía que amparan las facturas:'
@@ -217,7 +216,7 @@ def generate_letter_pdf(template_name, invoices_str, output_path):
     else:
         # Si no, usa el constructor por defecto
         print("[DEBUG] Plantilla simple detectada. Usando _build_default_pdf.")
-        _build_default_pdf(elements, styles, template_name, template_content, invoices_str)
+        _build_default_pdf(elements, styles, template_content, invoices_str)
 
     # Añadimos el bloque de firma estandarizado
     print("[DEBUG] Añadiendo bloque de firma...")

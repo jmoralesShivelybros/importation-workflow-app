@@ -8,7 +8,6 @@ import json
 from tkinter import filedialog
 import time
 from datetime import datetime
-
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__))) # Añade la raíz del proyecto al sys.path
@@ -23,10 +22,10 @@ from exportation_window import ExportationWindow
 def get_base_path():
     """ Obtiene la ruta base para encontrar los recursos, tanto en desarrollo como en el ejecutable."""
     if getattr(sys, 'frozen', False):
-        # Si la aplicación está "congelada" (es un .exe), la base es el directorio temporal _MEIPASS
-        return sys._MEIPASS
+        # Si la aplicación está "congelada" (es un .exe), la ruta base es el directorio del ejecutable
+        return os.path.dirname(sys.executable)
     else:
-        # Si se está ejecutando como un script normal, la base es el directorio del script
+        # Si está en modo de desarrollo, la ruta base es el directorio del script actual
         return os.path.dirname(os.path.abspath(__file__))
 
 CONFIG_FILE = os.path.join(get_base_path(), "config.json")
@@ -329,12 +328,6 @@ class ImportationApp(ttk.Window):
             return
         self.open_child_window(NormLetterWindow)
 
-    def open_master_update_window(self):
-        if not self.selected_week.get():
-            messagebox.showwarning("Advertencia", "Por favor selecciona un número de semana")
-            return
-        self.open_child_window(MasterWindow) # Llama a la nueva ventana
-
     def open_child_window(self, WindowClass):
         # Oculta la ventana principal y abre la secundaria
         self.withdraw()
@@ -378,14 +371,6 @@ class ImportationApp(ttk.Window):
             messagebox.showerror(
                 "Error de Recursos",
                 f"No se encontró la carpeta de plantillas de cartas:\n{template_dir}\n\nAsegúrate de que la estructura de archivos sea correcta."
-            )
-            self.destroy()
-            return False
-        
-        if not os.path.exists(logo_path):
-            messagebox.showerror(
-                "Error de Recursos",
-                f"No se encontró el archivo del logo:\n{logo_path}\n\nAsegúrate de que el archivo 'logo_shively.png' esté en la carpeta 'firma_cartas/logo'."
             )
             self.destroy()
             return False

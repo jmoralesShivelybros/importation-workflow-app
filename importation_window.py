@@ -10,7 +10,7 @@ from pdf2image import convert_from_path
 import re
 import sys
 import os
-import cv2
+import cv2 # Importa la librería OpenCV
 import numpy as np
 from io import BytesIO # Para manejar imágenes en memoria
 # --- IA DE GOOGLE ---
