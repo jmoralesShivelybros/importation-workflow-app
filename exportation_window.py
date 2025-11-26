@@ -1,14 +1,11 @@
-import tkinter as tk
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-from tkinter import messagebox, filedialog
-from tkinter.ttk import LabelFrame # Añadir esta línea
+import streamlit as st
 import pdfplumber
 from datetime import datetime
 import os
 import re
 import sys
 import pandas as pd
+from io import BytesIO
 from tabulate import tabulate
 import textwrap
 from pypdf import PdfWriter
@@ -31,192 +28,22 @@ def get_base_path():
         # Si está en modo de desarrollo, la ruta base es el directorio del script actual
         return os.path.dirname(os.path.abspath(__file__))
 
-class ExportationWindow(ttk.Toplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Generar Exportación")
-        self.geometry("1200x900")  # Pantalla más larga y ancha
-        self.parent = parent
-
-        # --- Llamada para crear los elementos de la interfaz ---
-        self.create_widgets()
-        self.parent._center_window(self) # Centrar la ventana después de crear los widgets
-
-    def create_widgets(self):
-        main_frame = ttk.Frame(self, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(
-            main_frame,
-            text="Sube los archivos requeridos para la exportación:",
-            bootstyle="secondary inverse",
-            font=("Segoe UI", 14, "bold")
-        ).pack(pady=(0, 20))
-
-        self.files = [None, None, None]
-        self.file_labels = []
-        self.extracted_data_cache = [None, None, None] # Caché para los datos extraídos
-        self.certificate_files = self.get_certificate_files()
-        self.selected_cert = tk.StringVar()
-
-        file_names = [
-            "Carta de General Motors (PDF)",
-            "Factura Comercial (PDF)",
-            "Custom Order (PDF) (opcional)"
-        ]
-
-        files_frame = ttk.Frame(main_frame)
-        files_frame.pack(fill=tk.X, pady=10)
-
-        for idx, name in enumerate(file_names):
-            frame = ttk.Frame(files_frame)
-            frame.pack(fill="x", pady=10, padx=20)
-            label = ttk.Label(frame, text=name + ": ", width=35, anchor="w")
-            label.pack(side="left")
-            self.file_labels.append(label)
-            btn = ttk.Button(frame, text="Seleccionar archivo", command=lambda i=idx: self.select_file(i))
-            btn.pack(side="left", padx=10)
-
-        # --- Sección para Certificados de Origen ---
-        ttk.Separator(files_frame, orient='horizontal').pack(fill='x', pady=15, padx=20)
-
-        cert_label = ttk.Label(files_frame, text="Seleccionar Certificado de Origen (opcional):", font=("Segoe UI", 11, "bold"))
-        cert_label.pack(padx=20, anchor='w')
-
-        cert_frame = ttk.Frame(files_frame)
-        cert_frame.pack(fill='x', pady=5, padx=20)
-        ttk.Label(cert_frame, text="Certificado:", width=15).pack(side="left")
-        cert_combo = ttk.Combobox(
-            cert_frame,
-            textvariable=self.selected_cert,
-            values=[""] + self.certificate_files, # Añadir opción vacía
-            state="readonly"
-        )
-        cert_combo.pack(side="left", fill="x", expand=True)
-
-        # --- Frame para botones de acción ---
-        action_buttons_frame = ttk.Frame(files_frame)
-        action_buttons_frame.pack(fill=tk.X, pady=(20, 10), padx=20)
-
-        # Botón para generar PDF final
-        generate_pdf_btn = ttk.Button(
-            action_buttons_frame,
-            text="✓ Generar PDF Final",
-            bootstyle="success",
-            command=self.generate_final_pdf,
-            padding=(20, 15)
-        )
-        generate_pdf_btn.pack(side="left", expand=True, fill=tk.X, padx=(0, 5))
-
-        # Botón para exportar a Excel
-        export_excel_btn = ttk.Button(
-            action_buttons_frame,
-            text="Exportar Tabla a Excel",
-            bootstyle="info",
-            command=self.export_to_excel,
-            padding=(20, 15)
-        )
-        export_excel_btn.pack(side="left", expand=True, fill=tk.X, padx=(5, 0))
-        # Información de la exportación (cambiar ttk.LabelFrame a LabelFrame)
-        self.info_frame = LabelFrame(
-            main_frame,
-            text="Información de la exportación",
-            padding="15",
-            bootstyle="info"
-        )
-        self.info_frame.pack(fill=tk.BOTH, expand=True, pady=20)
-
-        self.info_text = tk.Text(
-            self.info_frame,
-            height=30,
-            relief="flat",
-            bg='#eaf6fb',
-            fg='#222222',
-            font=("Consolas", 13),
-            padx=10,
-            pady=10,
-            state="disabled",
-            wrap="word"
-        )
-        self.info_text.pack(fill=tk.BOTH, expand=True)
-
-        # Log de eventos
-        log_frame = LabelFrame( # Cambiar ttk.LabelFrame a LabelFrame
-            main_frame,
-            text="Log de eventos",
-            padding="15",
-            bootstyle="secondary"
-        )
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-
-        log_scroll = ttk.Scrollbar(log_frame, bootstyle="round-secondary")
-        self.log_text = tk.Text(
-            log_frame,
-            height=8,
-            relief="flat",
-            bg='#2b3e50',
-            fg='#ffffff',
-            insertbackground='#ffffff',
-            font=("Consolas", 12),
-            padx=10,
-            pady=10
-        )
-        log_scroll.config(command=self.log_text.yview)
-        self.log_text.config(yscrollcommand=log_scroll.set)
-
-        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-
-
-    def select_file(self, idx):
-        file_path = tk.filedialog.askopenfilename(
-            filetypes=[("PDF files", "*.pdf")]
-        )
-        if file_path:
-            self.files[idx] = file_path
-            self.file_labels[idx].config(
-                text=f"✔ {self.file_labels[idx].cget('text').split(':')[0]}: {os.path.basename(file_path)}",
-                bootstyle="success"
-            )
-            self.log_message(f"Archivo seleccionado: {os.path.basename(file_path)}")
-            self.log_message("Extrayendo datos del PDF...")
-            self.extracted_data_cache[idx] = self.extract_and_process_info(file_path)
-            self.log_message("Extracción completada.")
-            self.update_export_info()
-
-    def update_export_info(self):
-        self.info_text.config(state="normal")
-        self.info_text.delete(1.0, tk.END)
-        # Configura el tag para negritas si no existe
-        if not "bold" in self.info_text.tag_names():
-            self.info_text.tag_configure("bold", font=("Consolas", 13, "bold"))
-        
-        for datos in self.extracted_data_cache:
-            if datos:
-                # Usamos los datos del caché para mostrar el resumen
-                resumen = self.format_export_summary(datos)
-                for texto, tag in resumen:
-                    if tag:
-                        self.info_text.insert(tk.END, texto, tag)
-                    else:
-                        self.info_text.insert(tk.END, texto)
-                self.info_text.insert(tk.END, "\n\n")
-        self.info_text.config(state="disabled")
-
-    def get_certificate_files(self):
+@st.cache_data
+def get_certificate_files(_folder_manager):
         """Obtiene la lista de archivos PDF de la carpeta de certificados."""
         try:
             # Usamos el FolderManager para obtener la ruta correcta y centralizada
-            cert_folder = self.parent.folder_manager.get_certificados_folder_path()
+            cert_folder = _folder_manager.get_certificados_folder_path()
             if not os.path.exists(cert_folder):
-                self.log_message(f"ADVERTENCIA: La carpeta de certificados no se encontró en {cert_folder}")
+                st.warning(f"La carpeta de certificados no se encontró en {cert_folder}")
                 return []
             return sorted([f for f in os.listdir(cert_folder) if f.lower().endswith('.pdf') and not f.startswith('~$')])
         except Exception as e:
-            self.log_message(f"ADVERTENCIA: Error al leer la carpeta de certificados: {e}")
+            st.error(f"Error al leer la carpeta de certificados: {e}")
             return []
 
-    def extract_and_process_info(self, file_path):
+@st.cache_data(show_spinner="Extrayendo información del PDF...")
+def extract_and_process_info(file_content, file_name):
         datos = {
             "shipper": "",
             "fecha": "",
@@ -225,7 +52,7 @@ class ExportationWindow(ttk.Toplevel):
             "articulos": []
         }
         try:
-            with pdfplumber.open(file_path) as pdf:
+            with pdfplumber.open(BytesIO(file_content)) as pdf:
                 text = ""
                 all_tables = []
                 for page in pdf.pages:
@@ -240,28 +67,28 @@ class ExportationWindow(ttk.Toplevel):
             return datos
 
         # SHIPPER
-        datos["shipper"] = self.find_first_match(os.path.basename(file_path), r"shipper[\s\-]*([0-9]+)", group=1)
+        datos["shipper"] = find_first_match(file_name, r"shipper[\s\-]*([0-9]+)", group=1)
         if not datos["shipper"]:
-            datos["shipper"] = self.find_first_match(text, r"SHIPPER\s*:?[\s\-]*([0-9]+)", group=1)
+            datos["shipper"] = find_first_match(text, r"SHIPPER\s*:?[\s\-]*([0-9]+)", group=1)
         if not datos["shipper"]:
-            datos["shipper"] = self.find_first_match(text, r"RA[\s\-:]*([0-9]+)", group=1)
+            datos["shipper"] = find_first_match(text, r"RA[\s\-:]*([0-9]+)", group=1)
 
         # FECHA
-        datos["fecha"] = self.find_first_match(text, r"Fecha de Retorno:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", group=1)
+        datos["fecha"] = find_first_match(text, r"Fecha de Retorno:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", group=1)
         if not datos["fecha"]:
-            datos["fecha"] = self.find_first_match(text, r"Date:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", group=1)
+            datos["fecha"] = find_first_match(text, r"Date:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", group=1)
         if not datos["fecha"]:
-            datos["fecha"] = self.find_first_match(text, r"Vigencia del eshipper:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", group=1)
+            datos["fecha"] = find_first_match(text, r"Vigencia del eshipper:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", group=1)
 
         # DIRECCIÓN DESTINO
-        datos["direccion_destino"] = self.extract_destination_address(text)
+        datos["direccion_destino"] = extract_destination_address(text)
 
         # ARTÍCULOS
-        datos["articulos"] = self.extract_items_from_table(all_tables)
+        datos["articulos"] = extract_items_from_table(all_tables)
 
         return datos
 
-    def extract_destination_address(self, text):
+def extract_destination_address(text):
         # Lista de posibles encabezados para la dirección de destino
         possible_headers = ["consigned to", "ship to", "deliver to", "sold to"]
         lines = text.splitlines()
@@ -269,7 +96,6 @@ class ExportationWindow(ttk.Toplevel):
         for i, line in enumerate(lines):
             for header in possible_headers:
                 if header in line.lower():
-                    self.log_message(f"Encabezado de dirección encontrado: '{header}'")
                     address_lines = []
                     # Tomar las siguientes 6 líneas como posible dirección
                     for l in lines[i+1:i+7]:
@@ -281,7 +107,7 @@ class ExportationWindow(ttk.Toplevel):
                     return "\n".join(address_lines)
         return ""
 
-    def extract_items_from_table(self, tables):
+def extract_items_from_table(tables):
         """
         Extrae artículos de tablas con encabezados en varias filas (como Commercial Invoice).
         Devuelve una lista de diccionarios con cantidad, tipo, descripción, unitario y total.
@@ -426,37 +252,27 @@ class ExportationWindow(ttk.Toplevel):
         print(tabulate(items, headers="keys", tablefmt="grid"))
         return items
 
-    def format_export_summary(self, datos):
+def format_export_summary(datos, widget_width=80):
         """
         Devuelve una lista de tuplas (texto, tag) para insertar en el Text widget con formato.
         Los artículos se muestran como tabla alineada y legible.
         """
         if "error" in datos:
-            return [("Error: " + datos["error"], None)]
+            return f"Error: {datos['error']}"
         resumen = []
         if datos["shipper"]:
-            resumen.append((f"********** SHIPPER: {datos['shipper']} **********\n\n", "bold"))
+            resumen.append(f"************ SHIPPER: {datos['shipper']} **********\\n**")
         if datos["fecha"]:
-            resumen.append(("Fecha: ", "bold"))
-            resumen.append((f"{datos['fecha']}\n", None))
+            resumen.append(f"**Fecha:** {datos['fecha']}")
         if datos["direccion_origen"]:
-            resumen.append(("Dirección de origen:\n", "bold"))
-            resumen.append((f"{datos['direccion_origen']}\n", None))
+            resumen.append(f"**Dirección de origen:**\n{datos['direccion_origen']}")
         if datos["direccion_destino"]:
-            resumen.append(("Dirección de destino:\n", "bold"))
-            resumen.append((f"{datos['direccion_destino']}\n", None))
+            resumen.append(f"**Dirección de destino:**\n{datos['direccion_destino']}")
         if datos.get("articulos"):
-            resumen.append(("\nArtículos:\n", "bold"))
+            resumen.append("\n**Artículos:**")
             
             # --- Lógica para tabla dinámica ---
             # Ancho del widget de texto en caracteres (aproximado)
-            try:
-                font_size_str = self.info_text.cget("font").split(" ")[-1]
-                font_size = int(font_size_str)
-                widget_width = self.info_text.winfo_width() // (font_size * 0.6) # 0.6 es un factor de ajuste para fuentes monoespaciadas
-            except (ValueError, ZeroDivisionError):
-                widget_width = 80 # Valor por defecto en caso de error
-            widget_width = max(80, int(widget_width)) # Ancho mínimo
 
             # Anchos fijos para columnas no descriptivas
             qty_w, tipo_w, unit_w, total_w = 10, 10, 15, 15 # Estos anchos son en caracteres
@@ -481,55 +297,122 @@ class ExportationWindow(ttk.Toplevel):
             
             # Generar tabla formateada usando tabulate
             tabla = tabulate(table_data, headers=headers, tablefmt="grid", numalign="right", stralign="left", colalign=("right", "left", "left", "right", "right"))
-            resumen.append((f"{tabla}\n", None))
+            resumen.append(f"```\n{tabla}\n```")
 
         if not resumen:
-            resumen = [("No se pudo extraer información clave de este PDF", None)]
-        return resumen
+            return "No se pudo extraer información clave de este PDF."
+        return "\n".join(resumen)
 
-    def generate_final_pdf(self):
-        self.log_message("Iniciando generación de PDF final...")
-        print("Archivos seleccionados:", self.files)  # Verifica los archivos seleccionados
+def find_first_match(text, pattern, group=1):
+    import re
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        return match.group(group).strip()
+    return ""
 
-        # --- LÓGICA DE VALIDACIÓN CONDICIONAL ---
+def render_exportation_page(folder_manager, week_num):
+    st.header("Generar Exportación")
+    
+    log_placeholder = st.expander("Log de eventos", expanded=False)
+
+    st.subheader("Sube los archivos requeridos para la exportación:")
+
+    # --- Carga de archivos ---
+    file_gm = st.file_uploader("Carta de General Motors (PDF)", type="pdf")
+    file_factura = st.file_uploader("Factura Comercial (PDF)", type="pdf")
+    file_custom = st.file_uploader("Custom Order (PDF) (opcional)", type="pdf")
+
+    # --- Procesamiento y cacheo de datos ---
+    data_gm = extract_and_process_info(file_gm.getvalue(), file_gm.name) if file_gm else None
+    data_factura = extract_and_process_info(file_factura.getvalue(), file_factura.name) if file_factura else None
+    data_custom = extract_and_process_info(file_custom.getvalue(), file_custom.name) if file_custom else None
+
+    # --- Mostrar información extraída ---
+    st.subheader("Información de la exportación")
+    with st.container(border=True):
+        if data_gm:
+            st.markdown(format_export_summary(data_gm))
+            st.divider()
+        if data_factura:
+            st.markdown(format_export_summary(data_factura))
+            st.divider()
+        if data_custom:
+            st.markdown(format_export_summary(data_custom))
+
+    # --- Sección para Certificados de Origen ---
+    st.subheader("Seleccionar Certificado de Origen")
+    certificate_files = get_certificate_files(folder_manager)
+    selected_cert = st.selectbox(
+        "Certificado:",
+        options=[""] + certificate_files,
+        index=0,
+        help="Selecciona el certificado de origen a incluir en el PDF final."
+    )
+
+    # --- Botones de acción ---
+    st.divider()
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("✓ Generar PDF Final", type="primary", use_container_width=True):
+            generate_final_pdf(
+                folder_manager, week_num,
+                [file_gm, file_factura, file_custom],
+                [data_gm, data_factura, data_custom],
+                selected_cert,
+                log_placeholder
+            )
+    
+    with col2:
+        if st.button("Exportar Tabla a Excel", use_container_width=True):
+            export_to_excel(
+                data_factura,
+                selected_cert,
+                log_placeholder
+            )
+
+def generate_final_pdf(folder_manager, week_num, files, extracted_data, selected_cert, log_placeholder):
+    # 1. Escribir los mensajes de log DENTRO del expander
+    with log_placeholder:
+        st.write("Iniciando generación de PDF final...")
+
+        # --- Lógica de validación ---
         # La "Carta de General Motors" (RMA) es opcional solo para Flint.
-        is_flint_export = self.selected_cert.get() == "Shively flint T-MEC 2025.pdf"
+        is_flint_export = selected_cert == "Shively flint T-MEC 2025.pdf"
 
         # 1. La Factura Comercial (self.files[1]) siempre es requerida.
-        if not self.files[1]:
-            messagebox.showerror("Error", "Falta la 'Factura Comercial'. Por favor, sube el archivo.")
-            self.log_message("Error: Falta la Factura Comercial.")
+        if not files[1]:
+            st.error("Falta la 'Factura Comercial'. Por favor, sube el archivo.")
+            st.write("Error: Falta la Factura Comercial.")
             return
 
         # 2. La Carta de GM (self.files[0]) es requerida A MENOS que sea para Flint.
-        if not is_flint_export and not self.files[0]:
-            messagebox.showerror("Error", "Falta la 'Carta de General Motors'. Por favor, sube el archivo.")
-            self.log_message("Error: Falta la Carta de General Motors para una exportación que no es de Flint.")
+        if not is_flint_export and not files[0]:
+            st.error("Falta la 'Carta de General Motors'. Por favor, sube el archivo.")
+            st.write("Error: Falta la Carta de General Motors para una exportación que no es de Flint.")
             return
 
-        # 2. Crear la lista de PDFs a unir, empezando por los certificados seleccionados.
+        # Crear la lista de PDFs a unir
         pdfs_to_merge = []
-        certificados_folder = self.parent.folder_manager.get_certificados_folder_path()
-        
-        cert_name = self.selected_cert.get()
+        certificados_folder = folder_manager.get_certificados_folder_path()
+
+        cert_name = selected_cert
         if cert_name:  # Si se seleccionó un certificado
             cert_path = os.path.join(certificados_folder, cert_name)
             pdfs_to_merge.append(str(cert_path))
             print("Certificado seleccionado:", cert_path)  # Verifica el certificado seleccionado
         
         # Añadir los archivos subidos por el usuario explícitamente
-        if self.files[0]: # Añadir la carta de GM solo si se seleccionó
-            pdfs_to_merge.append(self.files[0])
-        pdfs_to_merge.append(self.files[1]) # La factura comercial siempre se añade
-        if self.files[2]:  # Añadir el archivo opcional si fue seleccionado
-            pdfs_to_merge.append(self.files[2])
-
-        print("Archivos para unir:", pdfs_to_merge)  # Verifica la lista de archivos para unir
+        if files[0]: # Añadir la carta de GM solo si se seleccionó
+            pdfs_to_merge.append(files[0])
+        pdfs_to_merge.append(files[1]) # La factura comercial siempre se añade
+        if files[2]:  # Añadir el archivo opcional si fue seleccionado
+            pdfs_to_merge.append(files[2])
 
         # --- Generar Packing List y agregarlo a la lista ---
         try:
             # Obtener los items de la factura comercial (índice 1 en self.files)
-            commercial_invoice_data = self.extracted_data_cache[1]
+            commercial_invoice_data = extracted_data[1]
             if not commercial_invoice_data or not commercial_invoice_data.get("articulos"):
                 raise ValueError("No se encontraron artículos en la factura comercial")
             
@@ -546,7 +429,7 @@ class ExportationWindow(ttk.Toplevel):
             if not items:
                 raise ValueError("No se pudieron procesar los artículos de la factura comercial")
 
-            self.log_message(f"Se procesaron {len(items)} artículos de la factura comercial")
+            st.write(f"Se procesaron {len(items)} artículos de la factura comercial")
 
             # Definir las direcciones según el certificado
             addresses = {
@@ -565,7 +448,7 @@ class ExportationWindow(ttk.Toplevel):
             }
 
             # Obtener la dirección correcta según el certificado seleccionado
-            cert_name = self.selected_cert.get()
+            cert_name = selected_cert
             selected_address = addresses.get(cert_name, addresses["SuperAbrasivos T-MEC 2025.pdf"])
 
             # Construir los datos para el Packing List
@@ -579,12 +462,9 @@ class ExportationWindow(ttk.Toplevel):
                 "items": items
             }
 
-            print("Datos para el Packing List:", packing_data)  # Verifica los datos enviados al Packing List
-
             # --- CORRECCIÓN: Usar la carpeta de la semana de exportación para el Packing List temporal ---
-            current_year = self.parent.folder_manager.current_year
-            week_num = self.parent.selected_week.get()
-            output_folder = os.path.join(self.parent.folder_manager.exportacion_base_path, current_year, f"semana {week_num}")
+            current_year = folder_manager.current_year
+            output_folder = os.path.join(folder_manager.exportacion_base_path, current_year, f"semana {week_num}")
             os.makedirs(output_folder, exist_ok=True)
             
             packing_list_path = os.path.join(output_folder, "packing_slip_temp.pdf")
@@ -592,82 +472,96 @@ class ExportationWindow(ttk.Toplevel):
             # Generar el Packing List
             generate_packing_slip(packing_data, packing_list_path)
             pdfs_to_merge.append(str(packing_list_path))
-            self.log_message(f"Packing List generado y agregado: {os.path.basename(packing_list_path)}")
+            st.write(f"Packing List generado y agregado: {os.path.basename(packing_list_path)}")
         except Exception as e:
-            self.log_message(f"Error generando Packing List: {e}")
-            messagebox.showerror("Error Packing List", f"Ocurrió un error al generar el Packing List: {e}")
+            st.write(f"Error generando Packing List: {e}")
+            st.error(f"Ocurrió un error al generar el Packing List: {e}")
             return
 
-        # --- MODO DEPURACIÓN: Mostrar la lista final de archivos a unir ---
-        self.log_message("\n--- Archivos a incluir en el PDF final: ---")
-        for f in pdfs_to_merge:
-            self.log_message(f"- {os.path.basename(f)}")
-        print("Archivos finales para unir:", pdfs_to_merge)  # Verifica los archivos finales para unir
-        self.log_message("------------------------------------------\n")
+        # Mostrar la lista de archivos a unir en el log
+        st.write("\n--- Archivos a incluir en el PDF final: ---")
+        for item in pdfs_to_merge:
+            if hasattr(item, 'name'): # Es un objeto UploadedFile
+                st.write(f"- {item.name}")
+            else: # Es una ruta de texto (string)
+                st.write(f"- {os.path.basename(item)}")
+        st.write("------------------------------------------\n")
 
-        # 5. Validar que todos los archivos en la lista existen antes de unir
         try:
             for file_path in pdfs_to_merge:
-                if not os.path.exists(file_path):
+                # Solo validamos la existencia si es una ruta de texto (string)
+                # Los objetos UploadedFile ya existen en memoria.
+                if isinstance(file_path, str) and not os.path.exists(file_path):
                     raise FileNotFoundError(f"El archivo seleccionado no se encuentra en la ruta: {file_path}")
         except FileNotFoundError as e:
-            self.log_message(f"Error de validación: {e}")
-            messagebox.showerror("Archivo no encontrado", str(e))
+            st.write(f"Error de validación: {e}")
+            st.error(str(e))
             return
 
-        # 6. Unir los PDFs
-        merger = PdfWriter()
-        try:
-            for pdf_path in pdfs_to_merge:
-                self.log_message(f"Añadiendo al merge: {os.path.basename(pdf_path)}")
-                merger.append(pdf_path)
+    # 2. Unir y guardar el PDF FUERA del expander de logs
+    merger = PdfWriter()
+    try:
+        for pdf_path in pdfs_to_merge:
+            merger.append(pdf_path)
 
-            # 7. Guardar el archivo final en una carpeta de historial dentro del proyecto
-            # --- USAREMOS EL FOLDER MANAGER PARA OBTENER LA RUTA CORRECTA ---
-            # La ruta será: ...\Logistica\exportacion\[año_actual]
-            current_year = self.parent.folder_manager.current_year
-            week_num = self.parent.selected_week.get()
-            output_folder = os.path.join(self.parent.folder_manager.exportacion_base_path, current_year, f"semana {week_num}")
-            os.makedirs(output_folder, exist_ok=True)
-            
-            # --- Crear un nombre de archivo personalizado (LÓGICA MEJORADA) ---
-            # Busca el shipper en todos los archivos cargados, dando prioridad a la Carta de GM y luego a la Factura.
-            shipper_number = "SIN_SHIPPER"
-            if self.extracted_data_cache[0] and self.extracted_data_cache[0].get("shipper"):
-                shipper_number = self.extracted_data_cache[0]["shipper"]
-            elif self.extracted_data_cache[1] and self.extracted_data_cache[1].get("shipper"):
-                shipper_number = self.extracted_data_cache[1]["shipper"]
-            elif self.extracted_data_cache[2] and self.extracted_data_cache[2].get("shipper"):
-                shipper_number = self.extracted_data_cache[2]["shipper"]
-            
-            # Formatear la fecha actual
-            date_str = datetime.now().strftime("%m-%d-%Y")
-            
-            output_filename = f"{shipper_number}_{date_str}.pdf"
-            output_path = os.path.join(output_folder, output_filename)
+        # Guardar el archivo final
+        current_year = folder_manager.current_year
+        output_folder = os.path.join(folder_manager.exportacion_base_path, current_year, f"semana {week_num}")
+        os.makedirs(output_folder, exist_ok=True)
+        
+        # Crear un nombre de archivo personalizado
+        shipper_number = "SIN_SHIPPER"
+        if extracted_data[0] and extracted_data[0].get("shipper"):
+            shipper_number = extracted_data[0]["shipper"]
+        elif extracted_data[1] and extracted_data[1].get("shipper"):
+            shipper_number = extracted_data[1]["shipper"]
+        elif extracted_data[2] and extracted_data[2].get("shipper"):
+            shipper_number = extracted_data[2]["shipper"]
+        
+        date_str = datetime.now().strftime("%m-%d-%Y")
+        output_filename = f"{shipper_number}_{date_str}.pdf"
+        output_path = os.path.join(output_folder, output_filename)
 
-            merger.write(str(output_path))
-            merger.close()
-            self.log_message(f"PDF final generado exitosamente en: {output_path}")
-            print("PDF final generado:", output_path)  # Verifica la ruta del PDF final generado
-            messagebox.showinfo("Éxito", f"El archivo '{output_filename}' ha sido guardado en:\n{output_folder}")
-        except Exception as e:
-            self.log_message(f"Error al unir los PDFs: {e}")
-            messagebox.showerror("Error de Fusión", f"Ocurrió un error al generar el PDF final: {e}")
+        merger.write(str(output_path))
+        merger.close()
 
-    def export_to_excel(self):
-        self.log_message("Iniciando exportación de datos de rastreo a Excel...")
+    except Exception as e:
+        with log_placeholder:
+            st.write(f"Error al unir los PDFs: {e}")
+        st.error(f"Ocurrió un error al generar el PDF final: {e}")
+        return # Detener la ejecución si hay un error
 
-        # Validar que la factura comercial esté cargada, ya que contiene los artículos
-        if not self.files[1] or not self.extracted_data_cache[1]:
-            messagebox.showerror("Error", "Falta la 'Factura Comercial'. Por favor, sube el archivo para poder generar el reporte de rastreo.")
-            self.log_message("Error: No se encontró la Factura Comercial para la exportación.")
+    # 3. Mostrar los resultados al usuario FUERA del expander
+    st.toast(f'¡PDF "{output_filename}" generado!', icon='📄')
+
+    # Leemos el archivo que acabamos de crear en memoria para el botón de descarga
+    with open(output_path, "rb") as pdf_file:
+        pdf_bytes = pdf_file.read()
+
+    # Mostramos el botón de descarga
+    st.download_button(
+        label=f"📄 Descargar {output_filename}",
+        data=pdf_bytes,
+        file_name=output_filename,
+        mime="application/pdf"
+    )
+    st.info(f"El archivo también fue guardado en la ruta:\n`{output_path}`")
+
+
+def export_to_excel(data_factura, selected_cert, log_placeholder):
+    # 1. Validar y preparar los datos. Los mensajes de log se quedan en el expander.
+    with log_placeholder:
+        st.write("Iniciando exportación de datos de rastreo a Excel...")
+
+        if not data_factura:
+            st.warning("Falta la 'Factura Comercial'. Por favor, sube el archivo para poder generar el reporte de rastreo.")
+            st.write("Error: No se encontró la Factura Comercial para la exportación.")
             return
 
-        datos = self.extracted_data_cache[1] # Usamos los datos de la factura comercial
+        datos = data_factura # Usamos los datos de la factura comercial
 
         # Determinar datos basados en el certificado
-        cert_name = self.selected_cert.get().lower()
+        cert_name = selected_cert.lower()
         destino = ""
         fraccion = ""
         if "saint gobain" in cert_name:
@@ -703,49 +597,28 @@ class ExportationWindow(ttk.Toplevel):
             })
 
         if not rastreo_data:
-            messagebox.showwarning("Sin datos", "No se encontraron artículos en la factura comercial para exportar.")
-            self.log_message("Advertencia: No se encontraron artículos para exportar.")
+            st.warning("No se encontraron artículos en la factura comercial para exportar.")
+            st.write("Advertencia: No se encontraron artículos para exportar.")
             return
-
-        # Crear un DataFrame de pandas
+    
+    # 2. Crear el archivo Excel en memoria FUERA del expander de logs.
+    try:
         df = pd.DataFrame(rastreo_data, columns=rastreo_headers)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Rastreo')
+        excel_bytes = output.getvalue()
+    except Exception as e:
+        st.error(f"Error al crear el archivo Excel: {e}")
+        return
 
-        # Pedir al usuario la ubicación para guardar el archivo
-        try:
-            shipper_number = datos.get("shipper", "RASTREO")
-            date_str = datetime.now().strftime("%Y%m%d")
-            default_filename = f"{shipper_number}_{date_str}.xlsx"
+    # 3. Mostrar la notificación y el botón de descarga al usuario.
+    file_name = f"{datos.get('shipper', 'RASTREO')}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    st.toast(f'¡Excel "{file_name}" listo para descargar!', icon='📊')
 
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".xlsx",
-                filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")],
-                initialfile=default_filename,
-                title="Guardar reporte de rastreo"
-            )
-
-            if file_path:
-                df.to_excel(file_path, index=False)
-                self.log_message(f"Reporte de rastreo exportado exitosamente a: {file_path}")
-                messagebox.showinfo("Éxito", f"El archivo ha sido guardado correctamente en:\n{file_path}")
-        except Exception as e:
-            self.log_message(f"Error al exportar a Excel: {e}")
-            messagebox.showerror("Error de Exportación", f"Ocurrió un error al guardar el archivo de Excel: {e}")
-
-    def log_message(self, message):
-        self.log_text.insert(tk.END, f"{message}\n")
-        self.log_text.see(tk.END)
-        self.update()
-
-    def add_back_button(self):
-        back_btn = ttk.Button(self, text="Regresar", bootstyle="danger", command=self.on_back)
-        back_btn.pack(anchor="ne", padx=10, pady=10)
-
-    def on_back(self):
-        self.destroy()
-
-    def find_first_match(self, text, pattern, group=1):
-        import re
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            return match.group(group).strip()
-        return ""
+    st.download_button(
+        label=f"📊 Descargar {file_name}",
+        data=excel_bytes,
+        file_name=file_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
