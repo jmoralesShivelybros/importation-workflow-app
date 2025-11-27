@@ -50,23 +50,6 @@ def main():
 
         st.divider()
 
-        # --- Sección para subir archivos ---
-        st.header("Cargar Archivos")
-        uploaded_files = st.file_uploader(
-            "Sube aquí tus facturas o archivos PDF",
-            accept_multiple_files=True,
-            type=['pdf']
-        )
-
-        if uploaded_files:
-            week_folder = folder_manager.get_week_folder_path(st.session_state.selected_week)
-            for uploaded_file in uploaded_files:
-                with open(os.path.join(week_folder, uploaded_file.name), "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-            st.success(f"{len(uploaded_files)} archivo(s) cargado(s) para la semana {st.session_state.selected_week}.")
-        
-        st.divider()
-        
         # Menú de acciones
         app_mode = st.radio(
             "Selecciona una acción",
