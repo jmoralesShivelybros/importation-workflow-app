@@ -124,7 +124,15 @@ def extract_data_from_pdf_logic(pdf_file):
             model = genai.GenerativeModel('gemini-pro-latest') # Usamos el modelo estándar más compatible
 
             # --- Preparamos TODAS las imágenes para enviarlas a Gemini ---
-            image_parts = [{"mime_type": "image/jpeg", "data": img.tobytes()} for img in images]
+            # Corregimos el envío de imágenes: cada imagen debe ser codificada a JPEG en memoria.
+            image_parts = []
+            for img in images:
+                buffered = BytesIO()
+                img.save(buffered, format="JPEG")
+                image_parts.append({
+                    "mime_type": "image/jpeg",
+                    "data": buffered.getvalue()
+                })
             
             # --- El prompt que has diseñado ---
             prompt = f"""
