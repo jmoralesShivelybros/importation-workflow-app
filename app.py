@@ -13,7 +13,6 @@ from norm_letter_window import render_norm_letter_page
 from exportation_window import render_exportation_page
 # --- NUEVO: Importamos la lógica de datos del master, pero no la ventana ---
 from master.master_data import MasterDataManager
-from tkinter import messagebox # Esta dependencia se debe eliminar eventualmente
 
 def main():
     st.set_page_config(layout="wide", page_title="Sistema de Logística")
