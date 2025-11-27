@@ -11,8 +11,6 @@ venv/
 *.env
 
 # Carpetas de distribución y compilación de PyInstaller
-dist/
-build/
 *.spec
 
 # Archivos de configuración de VSCode
