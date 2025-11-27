@@ -16,8 +16,6 @@ pdfplumber==0.11.7
 pefile==2023.2.7
 pillow==10.4.0
 pycparser==2.23
-pyinstaller==6.16.0
-pyinstaller-hooks-contrib==2025.9
 pypdf==6.1.1
 pypdfium2==4.30.0
 pytesseract==0.3.13
@@ -31,3 +29,14 @@ tkinterweb==4.4.4
 tkinterweb-tkhtml==1.1.4
 ttkbootstrap==1.14.2
 tzdata==2025.2
+streamlit
+pandas
+openpyxl
+reportlab
+pillow
+pdf2image
+pdfminer.six
+pdfplumber
+pypdf
+pypdfium2
+pytesseract
