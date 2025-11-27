@@ -3,9 +3,6 @@ import json
 from datetime import datetime
 import sys
 import os
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__))) # Añade la raíz del proyecto al sys.path
-
 # --- Importamos las funciones que renderizarán cada "página" ---
 # (Estos archivos los modificaremos a continuación)
 from firma_cartas import letter_generator # Importar desde el subpaquete firma_cartas
