@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 from datetime import datetime
+import tempfile
 import sys
 import os
 # --- Importamos las funciones que renderizarán cada "página" ---
@@ -11,76 +12,18 @@ from importation_window import render_importation_page
 from norm_letter_window import render_norm_letter_page
 from exportation_window import render_exportation_page
 
-
-def get_base_path():
-    """ Obtiene la ruta base para encontrar los recursos, tanto en desarrollo como en el ejecutable."""
-    if getattr(sys, 'frozen', False):
-        # Si la aplicación está "congelada" (es un .exe), la ruta base es el directorio del ejecutable
-        return os.path.dirname(sys.executable)
-    else:
-        # Si está en modo de desarrollo, la ruta base es el directorio del script actual
-        return os.path.dirname(os.path.abspath(__file__))
-
-CONFIG_FILE = os.path.join(get_base_path(), "config.json")
-
-def load_or_create_config():
-    """Carga la configuración de la ruta de logística desde config.json."""
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            config = json.load(f)
-        if "logistica_root" in config and os.path.exists(config["logistica_root"]):
-            return config["logistica_root"]
-    except (FileNotFoundError, json.JSONDecodeError):
-        # Si el archivo no existe o está corrupto, no devolvemos nada.
-        # La app principal se encargará de solicitar la configuración.
-        return None
-
-def save_config(new_path):
-    """Guarda la nueva ruta en el archivo config.json."""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump({"logistica_root": new_path}, f, indent=4)
-
-def render_config_setup():
-    """Muestra la interfaz para la configuración inicial o el cambio de carpeta."""
-    st.warning("⚠️ **Configuración Requerida**")
-    st.info("Parece que es la primera vez que usas la aplicación o la carpeta de trabajo no es válida. Por favor, configura la ruta a tu carpeta 'Logistica'.")
-    
-    st.markdown("""
-    **Instrucciones:**
-    1. En tu explorador de archivos, navega hasta tu carpeta `Logistica`.
-    2. Haz clic derecho sobre la carpeta y selecciona "Copiar como ruta de acceso" (o similar).
-    3. Pega la ruta en el campo de abajo y presiona "Guardar Configuración".
-    """)
-    
-    new_path = st.text_input("Pega aquí la ruta a tu carpeta 'Logistica':", placeholder="Ej: C:\\Users\\TuUsuario\\Documentos\\Logistica")
-    
-    if st.button("Guardar Configuración", type="primary"):
-        if new_path and os.path.isdir(new_path):
-            save_config(new_path)
-            st.success("¡Configuración guardada! La aplicación se recargará.")
-            st.rerun()
-        else:
-            st.error("La ruta que ingresaste no es una carpeta válida. Por favor, inténtalo de nuevo.")
-
 def main():
     st.set_page_config(layout="wide", page_title="Sistema de Logística")
     st.title("📦 Sistema de Logística Web")
 
-    # --- NUEVO: Mostrar notificación si viene de una recarga de configuración ---
-    if st.session_state.get("show_config_toast"):
-        st.toast("¡Carpeta de trabajo actualizada!", icon="📁")
-        # Limpiamos la bandera para que no se muestre de nuevo
-        st.session_state.show_config_toast = False
-
-    # --- Carga de configuración ---
-    logistica_root_path = load_or_create_config()
+    # --- Lógica para despliegue en la nube ---
+    # Usamos un directorio temporal para actuar como la carpeta "Logistica"
+    # Este directorio se crea por sesión de usuario.
+    if 'temp_dir' not in st.session_state:
+        st.session_state.temp_dir = tempfile.mkdtemp()
     
-    # Si no hay configuración, mostramos el asistente y detenemos la app principal.
-    if not logistica_root_path:
-        render_config_setup()
-        st.stop()
-
-    folder_manager = FolderManager(logistica_root_path)
+    logistica_root_path = st.session_state.temp_dir
+    folder_manager = FolderManager(logistica_root_path)    
     
     # --- Barra lateral para navegación ---
     with st.sidebar:
@@ -100,27 +43,25 @@ def main():
             step=1
         )
         
-        if st.button("Crear carpeta de semana"):
-            created = folder_manager.create_week_folder(st.session_state.selected_week)
-            if created:
-                st.success(f"Carpeta para semana {st.session_state.selected_week} creada.")
-            else:
-                st.info(f"La carpeta para la semana {st.session_state.selected_week} ya existe.")
+        # Creamos la carpeta de la semana automáticamente para simplificar.
+        folder_manager.create_week_folder(st.session_state.selected_week)
 
         st.divider()
 
-        # --- NUEVO: Sección para cambiar la carpeta de trabajo ---
-        with st.expander("Configuración de Carpeta"):
-            st.caption(f"Actual: `{logistica_root_path}`")
-            new_path = st.text_input("Nueva ruta a la carpeta 'Logistica':", key="new_path_input")
-            if st.button("Guardar Nueva Carpeta"):
-                if new_path and os.path.isdir(new_path):
-                    save_config(new_path)
-                    # Preparamos la notificación para DESPUÉS de la recarga
-                    st.session_state.show_config_toast = True
-                    st.rerun()
-                else:
-                    st.error("La ruta no es una carpeta válida.")
+        # --- Sección para subir archivos ---
+        st.header("Cargar Archivos")
+        uploaded_files = st.file_uploader(
+            "Sube aquí tus facturas o archivos PDF",
+            accept_multiple_files=True,
+            type=['pdf']
+        )
+
+        if uploaded_files:
+            week_folder = folder_manager.get_week_folder_path(st.session_state.selected_week)
+            for uploaded_file in uploaded_files:
+                with open(os.path.join(week_folder, uploaded_file.name), "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+            st.success(f"{len(uploaded_files)} archivo(s) cargado(s) para la semana {st.session_state.selected_week}.")
         
         st.divider()
         
