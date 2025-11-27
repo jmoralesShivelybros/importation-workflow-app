@@ -6,9 +6,9 @@ __pycache__/
 
 # Carpetas de entornos virtuales
 .venv/
-venv/
 env/
-.env/
+venv/
+*.env
 
 # Carpetas de distribución y compilación de PyInstaller
 dist/
