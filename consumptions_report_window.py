@@ -52,8 +52,11 @@ def render_consumptions_report_page():
     # --- Procesamiento y Resultados ---
     if file_to_modify:
         if st.button("▶️ Procesar Archivo", type="primary", use_container_width=True):
-            # Definimos la ruta fija al archivo maestro
-            master_file_path = "/workspaces/importation-workflow-app/reporte_consumos/TEST CSV.csv"
+            # --- CORRECCIÓN DE RUTA ---
+            # Construimos la ruta al archivo maestro de forma relativa al script actual.
+            # Esto asegura que funcione tanto en local como en la web.
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            master_file_path = os.path.join(current_dir, "reporte_consumos", "TEST CSV.csv")
             
             if not os.path.exists(master_file_path):
                 st.error(f"Error crítico: No se encontró el archivo maestro en la ruta esperada: {master_file_path}")
