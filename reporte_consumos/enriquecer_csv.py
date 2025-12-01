@@ -270,7 +270,7 @@ def procesar_datos_en_memoria(archivo_maestro_path, archivo_a_modificar_stream):
             f"Se reemplazó 'Manufacturer/OEM ID#' con 'PT#' en {id_reemplazado_con_pt} registros.\n"
             f"Se calculó el 'Ext Price' para {ext_price_calculados} registros.\n"
             f"Se extrajo el 'PT#' desde la descripción en {pt_extraidos_desc} registros.\n"
-            f"¡NUEVO! Registros rescatados extrayendo PT# de la descripción: {pt_rescatados_desc}\n"
+            f"Registros rescatados extrayendo PT# de la descripción: {pt_rescatados_desc}\n"
             f"---------------------------------------------------\n"
 
         )
