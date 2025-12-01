@@ -11,6 +11,7 @@ from folder_manager import FolderManager
 from importation_window import render_importation_page
 from norm_letter_window import render_norm_letter_page
 from exportation_window import render_exportation_page
+from consumptions_report_window import render_consumptions_report_page
 # --- NUEVO: Importamos la lógica de datos del master, pero no la ventana ---
 # from master.master_data import MasterDataManager # Comentamos esta línea
 
@@ -53,55 +54,22 @@ def main():
         # Menú de acciones
         app_mode = st.radio(
             "Selecciona una acción",
-            ("Generar Importación (Beta)", "Generar Exportación", "Generar Carta de Norma") # Eliminamos la opción del menú
+            ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos (Beta)") # Eliminamos la opción del menú
         )
 
     # --- Renderizado de la página seleccionada ---
-    if app_mode == "Generar Importación (Beta)":
+    if app_mode == "Generar Importación":
         render_importation_page(folder_manager, st.session_state.selected_week)
     elif app_mode == "Generar Exportación":
         render_exportation_page(folder_manager, st.session_state.selected_week)
     elif app_mode == "Generar Carta de Norma":
         render_norm_letter_page(folder_manager, st.session_state.selected_week)
+    elif app_mode == "Generar Reporte de Consumos (Beta)":
+        render_consumptions_report_page()
     # --- NUEVO: Renderizado para la página del Master File ---
     # elif app_mode == "Actualizar Archivo Master": # Comentamos el renderizado de la página
     #     render_master_update_page()
 
-# Comentamos toda la función que depende del módulo 'master'
-# def render_master_update_page():
-#     """
-#     Renderiza la página para actualizar el archivo Master usando componentes de Streamlit.
-#     """
-#     st.header("Actualizar Archivo Master en SharePoint")
-# 
-#     # --- Manejo de credenciales y configuración de SharePoint ---
-#     # Usamos los secrets de Streamlit para las credenciales, es más seguro.
-#     try:
-#         site_url = st.secrets["sharepoint"]["SITE_URL"]
-#         file_relative_url = st.secrets["sharepoint"]["FILE_RELATIVE_URL"]
-#         username = st.secrets["sharepoint"]["USERNAME"]
-#         password = st.secrets["sharepoint"]["PASSWORD"]
-#     except (KeyError, FileNotFoundError):
-#         st.error("Error: Las credenciales de SharePoint no están configuradas en los Secrets de Streamlit.")
-#         st.info("Añade un archivo .streamlit/secrets.toml con la sección [sharepoint] y las claves necesarias.")
-#         st.stop()
-# 
-#     # --- Interfaz de usuario con Streamlit ---
-#     sheet_name = st.text_input("Nombre de la Pestaña:", value="Hoja1")
-#     cell_address = st.text_input("Celda (ej. B5):", value="A1")
-#     text_to_write = st.text_input("Texto a Escribir:", value="Prueba de conexión exitosa desde Streamlit")
-# 
-#     if st.button("Escribir en Excel de SharePoint", type="primary"):
-#         if not all([sheet_name, cell_address, text_to_write]):
-#             st.warning("Por favor, completa todos los campos.")
-#         else:
-#             try:
-#                 with st.spinner("Conectando y escribiendo en SharePoint..."):
-#                     data_manager = MasterDataManager(site_url, file_relative_url, username, password)
-#                     data_manager.write_single_cell(sheet_name, cell_address, text_to_write)
-#                 st.success(f"¡Éxito! Se ha escrito '{text_to_write}' en la celda {cell_address} de la hoja '{sheet_name}'.")
-#             except Exception as e:
-#                 st.error(f"Error al escribir en SharePoint: {e}")
 
 if __name__ == "__main__":
     main()
