@@ -39,13 +39,16 @@ def es_gm_plant_id_valido(valor):
 def extraer_pt_de_descripcion(descripcion):
     """
     Intenta extraer el PT# de la descripción.
-    Busca un código alfanumérico que a menudo está al principio.
+    Busca un patrón como 'PT' seguido de caracteres alfanuméricos.
     """
     if not descripcion:
         return None
-    # La descripción a menudo empieza con "PT# ...", así que tomamos la primera palabra.
-    primera_palabra = descripcion.strip().split()[0]
-    return limpiar_valor(primera_palabra)
+    
+    # Busca un patrón que empiece con PT seguido de letras y/o números.
+    match = re.search(r'PT[a-zA-Z0-9]+', descripcion)
+    if match:
+        return limpiar_valor(match.group(0))
+    return None
 
 def extraer_fabricante_de_descripcion(descripcion):
     """
@@ -68,6 +71,7 @@ def procesar_datos_en_memoria(archivo_maestro_path, archivo_a_modificar_stream):
     
     master_data = {}
     description_to_parttype_map = {} # Nuevo diccionario para Description -> PartType LOV
+    description_to_pt_map = {} # ¡NUEVO! Diccionario para Description -> PT#
     pt_duplicados_maestro = []
     try:
         with open(archivo_maestro_path, mode='r', encoding='utf-8-sig') as f_maestro:
@@ -107,6 +111,11 @@ def procesar_datos_en_memoria(archivo_maestro_path, archivo_a_modificar_stream):
                 if es_valido(descripcion) and es_valido(part_type):
                     if descripcion not in description_to_parttype_map:
                         description_to_parttype_map[descripcion] = part_type
+                
+                # ¡NUEVO! Llenamos el mapa de Descripción a PT#
+                if es_valido(descripcion) and es_valido(pt_numero):
+                    if descripcion not in description_to_pt_map:
+                        description_to_pt_map[descripcion] = pt_numero
             
             if len(master_data) == 0:
                 raise ValueError("No se cargó ningún dato del archivo maestro. Verifique el formato.")
@@ -170,11 +179,19 @@ def procesar_datos_en_memoria(archivo_maestro_path, archivo_a_modificar_stream):
 
             pt_numero = limpiar_valor(fila_entrada[idx_pt])
             
+            # --- LÓGICA DE EXTRACCIÓN DE PT# MEJORADA ---
+            # 1. Intentar extraer de la descripción si el PT# está vacío
             if not es_valido(pt_numero):
                 pt_numero = extraer_pt_de_descripcion(limpiar_valor(fila_entrada[idx_desc]))
                 if es_valido(pt_numero):
                     pt_extraidos_desc += 1
-            descripcion_fila = limpiar_valor(fila_entrada[idx_desc])
+                    fila_entrada[idx_pt] = pt_numero # ¡CORRECCIÓN! Asignar el PT# extraído a la fila.
+            
+            descripcion_fila = limpiar_valor(fila_entrada[idx_desc]) # Limpiamos la descripción una vez
+            # 2. Si aún no hay PT#, buscar la descripción en el mapa del maestro
+            if not es_valido(pt_numero) and descripcion_fila in description_to_pt_map:
+                pt_numero = description_to_pt_map[descripcion_fila]
+                fila_entrada[idx_pt] = pt_numero # Asignamos el PT# encontrado desde el maestro
             
             corregido_en_esta_fila = False
             if es_valido(pt_numero):
