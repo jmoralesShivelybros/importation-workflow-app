@@ -54,7 +54,7 @@ def main():
         # Menú de acciones
         app_mode = st.radio(
             "Selecciona una acción",
-            ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos (Beta)") # Eliminamos la opción del menú
+            ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos") # Eliminamos la opción del menú
         )
 
     # --- Renderizado de la página seleccionada ---

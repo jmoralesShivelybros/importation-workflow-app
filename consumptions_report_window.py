@@ -20,7 +20,7 @@ def clean_illegal_chars_for_excel(df):
     return df
 
 def render_consumptions_report_page():
-    st.header("Generador de Reporte de Consumos (Beta)")
+    st.header("Generador de Reporte de Consumos")
 
     st.info(
         "Esta herramienta enriquece un archivo CSV de consumos utilizando un archivo maestro como referencia. "

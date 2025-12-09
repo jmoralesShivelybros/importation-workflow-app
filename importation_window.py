@@ -191,7 +191,7 @@ def _get_poppler_path():
     return None
 
 def render_importation_page(folder_manager, week_num):
-    st.header("Generar Importación (Beta)")
+    st.header("Generar Importación")
 
     # Inicializar el estado de la sesión para los datos de la tabla
     if 'importation_data' not in st.session_state:
