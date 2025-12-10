@@ -65,7 +65,7 @@ def main():
     elif app_mode == "Generar Carta de Norma":
         render_norm_letter_page(folder_manager, st.session_state.selected_week)
     elif app_mode == "Generar Reporte de Consumos":
-        render_consumptions_report_page(folder_manager, st.session_state.selected_week)
+        render_consumptions_report_page()
     # --- NUEVO: Renderizado para la página del Master File ---
     # elif app_mode == "Actualizar Archivo Master": # Comentamos el renderizado de la página
     #     render_master_update_page()
