@@ -12,6 +12,7 @@ from importation_window import render_importation_page
 from norm_letter_window import render_norm_letter_page
 from exportation_window import render_exportation_page
 from consumptions_report_window import render_consumptions_report_page
+from excel_to_txt_converter import render_excel_to_txt_page
 # --- NUEVO: Importamos la lógica de datos del master, pero no la ventana ---
 # from master.master_data import MasterDataManager # Comentamos esta línea
 
@@ -51,11 +52,26 @@ def main():
 
         st.divider()
 
-        # Menú de acciones
-        app_mode = st.radio(
-            "Selecciona una acción",
-            ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos")
+        # --- Menú de acciones jerárquico ---
+        # 1. Selección del Módulo/Área
+        module = st.selectbox(
+            "Selecciona el área de trabajo",
+            # Agrega aquí los nuevos módulos, por ejemplo: "Almacén"
+            ("Logística","Almacenes") 
         )
+
+        app_mode = None
+        # 2. Muestra las acciones específicas para el módulo seleccionado
+        if module == "Logística":
+            app_mode = st.radio(
+                "Acciones de Logística",
+                ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos")
+            )
+        elif module == "Almacenes":
+              app_mode = st.radio("Acciones de Almacén", ("convertir Excel a TXT",))
+        # --- Fin del menú jerárquico ---
+
+
 
     # --- Renderizado de la página seleccionada ---
     if app_mode == "Generar Importación":
@@ -66,6 +82,8 @@ def main():
         render_norm_letter_page(folder_manager, st.session_state.selected_week)
     elif app_mode == "Generar Reporte de Consumos":
         render_consumptions_report_page()
+    elif app_mode == "convertir Excel a TXT":
+        render_excel_to_txt_page()
     # --- NUEVO: Renderizado para la página del Master File ---
     # elif app_mode == "Actualizar Archivo Master": # Comentamos el renderizado de la página
     #     render_master_update_page()
