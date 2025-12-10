@@ -54,7 +54,7 @@ def main():
         # Menú de acciones
         app_mode = st.radio(
             "Selecciona una acción",
-            ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos") # Eliminamos la opción del menú
+            ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos")
         )
 
     # --- Renderizado de la página seleccionada ---
@@ -64,8 +64,8 @@ def main():
         render_exportation_page(folder_manager, st.session_state.selected_week)
     elif app_mode == "Generar Carta de Norma":
         render_norm_letter_page(folder_manager, st.session_state.selected_week)
-    elif app_mode == "Generar Reporte de Consumos (Beta)":
-        render_consumptions_report_page()
+    elif app_mode == "Generar Reporte de Consumos":
+        render_consumptions_report_page(folder_manager, st.session_state.selected_week)
     # --- NUEVO: Renderizado para la página del Master File ---
     # elif app_mode == "Actualizar Archivo Master": # Comentamos el renderizado de la página
     #     render_master_update_page()
