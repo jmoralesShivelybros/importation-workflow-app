@@ -121,7 +121,7 @@ def extract_data_from_pdf_logic(pdf_file):
                  return {"error": "No se encontró la GOOGLE_API_KEY. Configúrala en los Secrets de Streamlit o como variable de entorno local."}, ""
 
             genai.configure(api_key=google_api_key)
-            model = genai.GenerativeModel('gemini-pro-latest') # Usamos el modelo estándar más compatible
+            model = genai.GenerativeModel('gemini-flash-latest') # Cambiado a un modelo más rápido y con cuota separada.
 
             # --- Preparamos TODAS las imágenes para enviarlas a Gemini ---
             # Corregimos el envío de imágenes: cada imagen debe ser codificada a JPEG en memoria.
