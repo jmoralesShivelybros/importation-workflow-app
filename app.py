@@ -13,6 +13,7 @@ from norm_letter_window import render_norm_letter_page
 from exportation_window import render_exportation_page
 from consumptions_report_window import render_consumptions_report_page
 from excel_to_txt_converter import render_excel_to_txt_page
+from warehouse_window import render_warehouse_page
 # --- NUEVO: Importamos la lógica de datos del master, pero no la ventana ---
 # from master.master_data import MasterDataManager # Comentamos esta línea
 
@@ -84,9 +85,14 @@ def main():
             st.session_state.app_mode = app_mode
         
         elif module == "Almacenes":
-            st.info("Próximamente: Funcionalidades de Almacén.")
-            # Limpiamos el modo de app para que no se muestre ninguna página de logística
-            st.session_state.app_mode = None
+            # Establecemos un modo específico para almacenes
+            app_mode = st.radio(
+                "Acciones de Almacén",
+                ("Recepción de Material", "Gestión y Estatus", "Monitor TV", "Historial"),
+                key="almacen_radio",
+                on_change=set_main_view
+            )
+            st.session_state.app_mode = app_mode
 
     # --- Lógica de renderizado principal ---
     # Damos prioridad a la vista de conversión si fue seleccionada
@@ -110,6 +116,8 @@ def render_module_page(app_mode, folder_manager, week_num):
         render_norm_letter_page(folder_manager, week_num)
     elif app_mode == "Generar Reporte de Consumos":
         render_consumptions_report_page()
+    elif app_mode in ["Recepción de Material", "Gestión y Estatus", "Monitor TV", "Historial"]:
+        render_warehouse_page(folder_manager, section=app_mode)
 
 if __name__ == "__main__":
     main()

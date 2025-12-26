@@ -15,6 +15,7 @@ class FolderManager:
         # Rutas específicas para importación y exportación
         self.importacion_base_path = os.path.join(self.logistica_root, "importacion", self.current_year)
         self.exportacion_base_path = os.path.join(self.logistica_root, "exportacion")
+        self.almacen_base_path = os.path.join(self.logistica_root, "almacen")
         
         # Subcarpetas estándar para cada área
         self.importacion_subfolders = ['Facturas', 'OMs', 'Cartas', 'master']
@@ -28,6 +29,7 @@ class FolderManager:
         print(f"Configurando carpetas en: {self.logistica_root}")
         os.makedirs(self.importacion_base_path, exist_ok=True)
         os.makedirs(self.exportacion_base_path, exist_ok=True)
+        os.makedirs(self.almacen_base_path, exist_ok=True)
 
         for subfolder in self.exportacion_subfolders:
             path = os.path.join(self.exportacion_base_path, subfolder)
@@ -134,3 +136,11 @@ class FolderManager:
     def get_certificados_folder_path(self):
         """Devuelve la ruta a la carpeta 'Certificados' de exportación."""
         return os.path.join(self.exportacion_base_path, "Certificados")
+
+    def get_warehouse_db_path(self):
+        """Devuelve la ruta al archivo CSV principal de inventario."""
+        return os.path.join(self.almacen_base_path, "inventario_almacen.csv")
+
+    def get_warehouse_log_path(self):
+        """Devuelve la ruta al archivo CSV de historial/logs."""
+        return os.path.join(self.almacen_base_path, "historial_movimientos.csv")
