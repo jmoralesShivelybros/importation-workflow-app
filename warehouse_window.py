@@ -48,6 +48,25 @@ def init_db():
         )
     ''')
     
+    # Tabla de rutas (NUEVO)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS routes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            timestamp DATETIME,
+            destino VARCHAR(255),
+            vehiculo VARCHAR(255),
+            usuario VARCHAR(100)
+        )
+    ''')
+    
+    # Tabla de relación items-ruta (NUEVO)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS route_items (
+            route_id INT,
+            item_id VARCHAR(50)
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -189,56 +208,96 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         else:
             df_view = df_inventory
 
-        # Mostrar tabla editable para cambios rápidos (solo algunas columnas)
         st.write(f"Mostrando {len(df_view)} registros.")
+        st.info("💡 **Modo Ruta:** Selecciona varios materiales en la tabla (casillas a la izquierda) para procesar su salida o cambio de estatus en grupo.")
         
-        # Usamos columnas para mostrar acciones por fila es complicado en Streamlit nativo,
-        # así que usaremos un selector de ID para actualizar estatus.
-        
-        st.dataframe(
+        # Tabla con selección activada
+        event = st.dataframe(
             df_view[["id", "pc", "numero_parte", "descripcion", "programa", "estatus", "consecutivo"]],
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="multi-row"
         )
 
-        st.divider()
-        st.markdown("#### 🛠️ Actualizar Estatus")
+        selected_rows = event.selection.rows
         
-        col_act1, col_act2, col_act3 = st.columns(3)
-        with col_act1:
-            # Obtener lista de IDs activos para el selectbox
-            ids_disponibles = df_view["id"].tolist()
-            selected_id = st.selectbox("Seleccionar ID de Artículo:", options=ids_disponibles)
-        
-        with col_act2:
-            new_status = st.selectbox("Nuevo Estatus:", options=ESTATUS_OPCIONES)
-        
-        with col_act3:
-            st.write("") # Espacio
-            st.write("") # Espacio
-            if st.button("Actualizar Estatus", type="primary"):
-                if selected_id:
-                    # Actualizar en el DataFrame
-                    idx = df_inventory[df_inventory["id"] == selected_id].index
-                    if not idx.empty:
-                        old_status = df_inventory.loc[idx[0], "estatus"]
-                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        conn = get_db_connection()
-                        if not conn: return # Salir si no hay conexión
+        if selected_rows:
+            st.divider()
+            st.markdown(f"### 🚚 Generar Ruta / Actualización Masiva")
+            
+            # Obtener items seleccionados
+            selected_df = df_view.iloc[selected_rows]
+            
+            st.write(f"Has seleccionado **{len(selected_df)} materiales** para mover.")
+            with st.expander("Ver detalles de la selección", expanded=False):
+                st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], use_container_width=True)
+
+            # Campos para la ruta
+            st.markdown("#### 📍 Datos de la Ruta (Opcional)")
+            col_r1, col_r2 = st.columns(2)
+            with col_r1:
+                destino_ruta = st.text_input("Destino / Planta:", placeholder="Ej. Planta Ramos")
+            with col_r2:
+                vehiculo_ruta = st.text_input("Vehículo:", placeholder="Ej. Nissan NP300")
+
+            col_act1, col_act2 = st.columns([2, 1])
+            with col_act1:
+                new_status = st.selectbox("Nuevo Estatus para la selección:", options=ESTATUS_OPCIONES, index=3, key="bulk_status_select") # Index 3 es "En proceso de entrega"
+            
+            with col_act2:
+                st.write("")
+                st.write("")
+                if st.button("✅ Procesar Ruta", type="primary", use_container_width=True):
+                    ids_to_update = selected_df["id"].tolist()
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    conn = get_db_connection()
+                    if conn:
                         cursor = conn.cursor()
-                        cursor.execute('''
-                            UPDATE inventory 
-                            SET estatus = %s, ultima_actualizacion = %s
-                            WHERE id = %s
-                        ''', (new_status, timestamp, selected_id))
+                        
+                        # 0. Crear Ruta si hay datos
+                        route_info_str = ""
+                        if destino_ruta or vehiculo_ruta:
+                            cursor.execute('''
+                                INSERT INTO routes (timestamp, destino, vehiculo, usuario)
+                                VALUES (%s, %s, %s, %s)
+                            ''', (timestamp, destino_ruta, vehiculo_ruta, "Almacenista"))
+                            route_id = cursor.lastrowid
+                            route_info_str = f" | Ruta #{route_id}: {destino_ruta} ({vehiculo_ruta})"
+                            
+                            # Asociar items a la ruta
+                            route_items_data = [(route_id, item_id) for item_id in ids_to_update]
+                            cursor.executemany('''
+                                INSERT INTO route_items (route_id, item_id) VALUES (%s, %s)
+                            ''', route_items_data)
+
+                        # 1. Actualizar Inventario (Bulk Update)
+                        # Generar placeholders para la cláusula IN (%s, %s, ...)
+                        placeholders = ', '.join(['%s'] * len(ids_to_update))
+                        query = f"UPDATE inventory SET estatus = %s, ultima_actualizacion = %s WHERE id IN ({placeholders})"
+                        params = [new_status, timestamp] + ids_to_update
+                        
+                        cursor.execute(query, params)
+                        
+                        # 2. Registrar Logs (Bulk Insert)
+                        log_entries = []
+                        for item_id in ids_to_update:
+                            log_entries.append((timestamp, item_id, "CAMBIO_ESTATUS_MASIVO", f"Cambio a '{new_status}'{route_info_str}", "Almacenista"))
+                            
+                        cursor.executemany('''
+                            INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
+                            VALUES (%s, %s, %s, %s, %s)
+                        ''', log_entries)
+                        
                         conn.commit()
                         conn.close()
                         
-                        log_movement(selected_id, "CAMBIO_ESTATUS", f"De '{old_status}' a '{new_status}'")
-                        st.toast(f"Estatus actualizado a: {new_status}")
-                        time.sleep(1)
+                        st.success(f"✅ Se actualizaron {len(ids_to_update)} ítems a '{new_status}' correctamente.")
+                        time.sleep(1.5)
                         st.rerun()
+        else:
+            st.caption("👈 Selecciona uno o más ítems en la tabla para ver las opciones de ruta.")
 
     # --- SECCIÓN: MONITOR TV ---
     elif section == "Monitor TV":
