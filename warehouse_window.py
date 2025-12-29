@@ -9,6 +9,7 @@ from db_connection.conn import get_db_connection # Importar la función centrali
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
+ALMACENISTAS = ["Jorge", "Fernando Prettel", "Otro"]
 
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
@@ -67,6 +68,17 @@ def init_db():
         )
     ''')
     
+    # --- MIGRACIONES (Actualizar tablas existentes si faltan columnas) ---
+    # Intentamos agregar las columnas nuevas. Si fallan es porque ya existen.
+    try:
+        cursor.execute("ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
 
@@ -112,6 +124,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     if section == "Recepción de Material":
         st.subheader("Registro de Entrada (PC Shively)")
         
+        # Selección de usuario
+        col_u1, _ = st.columns([1, 3])
+        with col_u1:
+            usuario_recepcion = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion")
+
         col1, col2 = st.columns(2)
         with col1:
             pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123")
@@ -164,11 +181,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         "valor_total": qty * price,
                         "estatus": "Recibido",
                         "fecha_entrada": timestamp,
-                        "ultima_actualizacion": timestamp
+                        "ultima_actualizacion": timestamp,
+                        "usuario_recepcion": usuario_recepcion
                     }
                     new_rows.append(new_row)
                     # Log
-                    log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}")
+                    log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion)
 
                 if new_rows:
                     # Insertar en base de datos
@@ -179,11 +197,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         INSERT INTO inventory (
                             id, pc, proveedor, factura, consecutivo, programa, 
                             numero_parte, descripcion, cantidad, precio_unitario, 
-                            valor_total, estatus, fecha_entrada, ultima_actualizacion
+                            valor_total, estatus, fecha_entrada, ultima_actualizacion,
+                            usuario_recepcion
                         ) VALUES (
                             %(id)s, %(pc)s, %(proveedor)s, %(factura)s, %(consecutivo)s, %(programa)s, 
                             %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(precio_unitario)s, 
-                            %(valor_total)s, %(estatus)s, %(fecha_entrada)s, %(ultima_actualizacion)s
+                            %(valor_total)s, %(estatus)s, %(fecha_entrada)s, %(ultima_actualizacion)s,
+                            %(usuario_recepcion)s
                         )
                     ''', new_rows)
                     conn.commit()
@@ -235,11 +255,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
             # Campos para la ruta
             st.markdown("#### 📍 Datos de la Ruta (Opcional)")
-            col_r1, col_r2 = st.columns(2)
+            col_r1, col_r2, col_r3 = st.columns(3)
             with col_r1:
                 destino_ruta = st.text_input("Destino / Planta:", placeholder="Ej. Planta Ramos")
             with col_r2:
                 vehiculo_ruta = st.text_input("Vehículo:", placeholder="Ej. Nissan NP300")
+            with col_r3:
+                usuario_ruta = st.selectbox("Responsable de Ruta:", options=ALMACENISTAS, key="user_ruta")
 
             col_act1, col_act2 = st.columns([2, 1])
             with col_act1:
@@ -262,7 +284,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             cursor.execute('''
                                 INSERT INTO routes (timestamp, destino, vehiculo, usuario)
                                 VALUES (%s, %s, %s, %s)
-                            ''', (timestamp, destino_ruta, vehiculo_ruta, "Almacenista"))
+                            ''', (timestamp, destino_ruta, vehiculo_ruta, usuario_ruta))
                             route_id = cursor.lastrowid
                             route_info_str = f" | Ruta #{route_id}: {destino_ruta} ({vehiculo_ruta})"
                             
@@ -283,7 +305,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         # 2. Registrar Logs (Bulk Insert)
                         log_entries = []
                         for item_id in ids_to_update:
-                            log_entries.append((timestamp, item_id, "CAMBIO_ESTATUS_MASIVO", f"Cambio a '{new_status}'{route_info_str}", "Almacenista"))
+                            log_entries.append((timestamp, item_id, "CAMBIO_ESTATUS_MASIVO", f"Cambio a '{new_status}'{route_info_str}", usuario_ruta))
                             
                         cursor.executemany('''
                             INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
@@ -325,6 +347,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         r.timestamp,
                         r.destino,
                         r.vehiculo,
+                        r.usuario,
                         i.pc,
                         i.numero_parte,
                         i.descripcion,
@@ -361,7 +384,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             c1, c2 = st.columns([3, 1])
                             with c1:
                                 st.subheader(f"📍 Ruta #{r_id} | {info_ruta['destino']}")
-                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 🕒 Salida: {fecha_str}")
+                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 👤 Responsable: {info_ruta['usuario']} | 🕒 Salida: {fecha_str}")
                             with c2:
                                 st.metric("Items", len(items_ruta))
                             
