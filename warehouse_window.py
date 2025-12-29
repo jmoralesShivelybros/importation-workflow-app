@@ -227,7 +227,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         with tab_crear:
             # Filtros
-            filtro_estatus = st.multiselect("Filtrar por Estatus:", options=ESTATUS_OPCIONES, default=["Recibido", "Etiquetado", "En Mesa/Clasificado"], key="filtro_estatus_crear")
+            filtro_estatus = st.multiselect("Filtrar por Estatus:", options=ESTATUS_OPCIONES, default=["Recibido"], key="filtro_estatus_crear")
             
             # Filtrar datos
             if filtro_estatus:
