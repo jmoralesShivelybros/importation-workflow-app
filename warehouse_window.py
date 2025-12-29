@@ -443,6 +443,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     FROM routes r
                     JOIN route_items ri ON r.id = ri.route_id
                     JOIN inventory i ON ri.item_id = i.id
+                    WHERE (r.estatus != 'Completada' OR r.estatus IS NULL) 
+                       OR (r.estatus = 'Completada' AND DATE(r.timestamp) = CURDATE())
                     ORDER BY r.timestamp DESC
                     LIMIT 50
                 """
