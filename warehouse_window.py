@@ -196,8 +196,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.rerun()
 
     # --- SECCIÓN: GESTIÓN Y ESTATUS ---
-    elif section == "Gestión y Estatus":
-        st.subheader("Gestión de Materiales en Almacén")
+    elif section == "Gestión y Rutas":
+        st.subheader("Gestión de Materiales y Rutas de Salida")
         
         # Filtros
         filtro_estatus = st.multiselect("Filtrar por Estatus:", options=ESTATUS_OPCIONES, default=["Recibido", "Etiquetado", "En Mesa/Clasificado"])

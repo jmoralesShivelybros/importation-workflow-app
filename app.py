@@ -88,7 +88,7 @@ def main():
             # Establecemos un modo específico para almacenes
             app_mode = st.radio(
                 "Acciones de Almacén",
-                ("Recepción de Material", "Gestión y Estatus", "Monitor TV", "Historial"),
+                ("Recepción de Material", "Gestión y Rutas", "Monitor TV", "Historial"),
                 key="almacen_radio",
                 on_change=set_main_view
             )
@@ -116,7 +116,7 @@ def render_module_page(app_mode, folder_manager, week_num):
         render_norm_letter_page(folder_manager, week_num)
     elif app_mode == "Generar Reporte de Consumos":
         render_consumptions_report_page()
-    elif app_mode in ["Recepción de Material", "Gestión y Estatus", "Monitor TV", "Historial"]:
+    elif app_mode in ["Recepción de Material", "Gestión y Rutas", "Monitor TV", "Historial"]:
         render_warehouse_page(folder_manager, section=app_mode)
 
 if __name__ == "__main__":
