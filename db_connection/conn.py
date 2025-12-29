@@ -8,13 +8,17 @@ def get_db_connection():
     """
     try:
         conn = mysql.connector.connect(
-            host="sql100.infinityfree.com",
-            user="if0_40787007",
+            host="gateway01.us-east-1.prod.aws.tidbcloud.com",
+            user="3jortA3asNPfVCt.root",
             password=st.secrets["Password_db"],
-            database="if0_40787007",
-            port=3306
+            database="test",
+            port=4000
         )
         return conn
     except mysql.connector.Error as err:
-        st.error(f"Error de conexión a la base de datos: {err}")
+        if err.errno == 2003 or "No address associated with hostname" in str(err):
+            st.warning("⚠️ No se puede conectar a la base de datos externa.")
+            st.info("💡 **Nota:** Si usas InfinityFree, recuerda que **bloquean conexiones externas**. Necesitas un proveedor como TiDB Cloud o Aiven que permita acceso remoto.")
+        else:
+            st.error(f"Error de conexión a la base de datos: {err}")
         return None
