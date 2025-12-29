@@ -4,8 +4,7 @@ import os
 from datetime import datetime
 import time
 import uuid
-import mysql.connector
-from mysql.conn import get_db_connection # Importar la función centralizada
+from db_connection.conn import get_db_connection # Importar la función centralizada
 
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
