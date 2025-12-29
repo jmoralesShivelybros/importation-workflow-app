@@ -305,7 +305,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         conn = get_db_connection()
         if not conn: return # Salir si no hay conexión
         try:
-            df_log = pd.read_sql_query("SELECT * FROM logs ORDER BY timestamp DESC", conn)
+            df_log = pd.read_sql_query("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 10", conn)
         except Exception:
             df_log = pd.DataFrame()
         conn.close()

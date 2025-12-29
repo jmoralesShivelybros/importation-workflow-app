@@ -16,9 +16,9 @@ def get_db_connection():
         )
         return conn
     except mysql.connector.Error as err:
-        if err.errno == 2003 or "No address associated with hostname" in str(err):
-            st.warning("⚠️ No se puede conectar a la base de datos externa.")
-            st.info("💡 **Nota:** Si usas InfinityFree, recuerda que **bloquean conexiones externas**. Necesitas un proveedor como TiDB Cloud o Aiven que permita acceso remoto.")
+        if err.errno == 2003:
+            st.error("⚠️ No se pudo conectar al servidor TiDB Cloud.")
+            st.info("💡 **Posible causa:** Tu IP actual no está autorizada. Ve a la consola de TiDB > Clusters > Connect > IP Access y agrega tu IP (o 0.0.0.0/0 para pruebas).")
         else:
             st.error(f"Error de conexión a la base de datos: {err}")
         return None
