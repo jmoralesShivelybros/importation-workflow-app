@@ -78,6 +78,10 @@ def init_db():
         cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()
@@ -219,107 +223,190 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     elif section == "Gestión y Rutas":
         st.subheader("Gestión de Materiales y Rutas de Salida")
         
-        # Filtros
-        filtro_estatus = st.multiselect("Filtrar por Estatus:", options=ESTATUS_OPCIONES, default=["Recibido", "Etiquetado", "En Mesa/Clasificado"])
-        
-        # Filtrar datos
-        if filtro_estatus:
-            df_view = df_inventory[df_inventory["estatus"].isin(filtro_estatus)]
-        else:
-            df_view = df_inventory
+        tab_crear, tab_activas = st.tabs(["📦 Crear Nueva Ruta", "🚚 Rutas Activas"])
 
-        st.write(f"Mostrando {len(df_view)} registros.")
-        st.info("💡 **Modo Ruta:** Selecciona varios materiales en la tabla (casillas a la izquierda) para procesar su salida o cambio de estatus en grupo.")
-        
-        # Tabla con selección activada
-        event = st.dataframe(
-            df_view[["id", "pc", "numero_parte", "descripcion", "programa", "estatus", "consecutivo"]],
-            use_container_width=True,
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="multi-row"
-        )
-
-        selected_rows = event.selection.rows
-        
-        if selected_rows:
-            st.divider()
-            st.markdown(f"### 🚚 Generar Ruta / Actualización Masiva")
+        with tab_crear:
+            # Filtros
+            filtro_estatus = st.multiselect("Filtrar por Estatus:", options=ESTATUS_OPCIONES, default=["Recibido", "Etiquetado", "En Mesa/Clasificado"], key="filtro_estatus_crear")
             
-            # Obtener items seleccionados
-            selected_df = df_view.iloc[selected_rows]
-            
-            st.write(f"Has seleccionado **{len(selected_df)} materiales** para mover.")
-            with st.expander("Ver detalles de la selección", expanded=False):
-                st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], use_container_width=True)
+            # Filtrar datos
+            if filtro_estatus:
+                df_view = df_inventory[df_inventory["estatus"].isin(filtro_estatus)]
+            else:
+                df_view = df_inventory
 
-            # Campos para la ruta
-            st.markdown("#### 📍 Datos de la Ruta (Opcional)")
-            col_r1, col_r2, col_r3 = st.columns(3)
-            with col_r1:
-                destino_ruta = st.text_input("Destino / Planta:", placeholder="Ej. Planta Ramos")
-            with col_r2:
-                vehiculo_ruta = st.text_input("Vehículo:", placeholder="Ej. Nissan NP300")
-            with col_r3:
-                usuario_ruta = st.selectbox("Responsable de Ruta:", options=ALMACENISTAS, key="user_ruta")
-
-            col_act1, col_act2 = st.columns([2, 1])
-            with col_act1:
-                new_status = st.selectbox("Nuevo Estatus para la selección:", options=ESTATUS_OPCIONES, index=3, key="bulk_status_select") # Index 3 es "En proceso de entrega"
+            st.write(f"Mostrando {len(df_view)} registros.")
+            st.info("💡 **Modo Ruta:** Selecciona varios materiales en la tabla (casillas a la izquierda) para procesar su salida o cambio de estatus en grupo.")
             
-            with col_act2:
-                st.write("")
-                st.write("")
-                if st.button("✅ Procesar Ruta", type="primary", use_container_width=True):
-                    ids_to_update = selected_df["id"].tolist()
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    conn = get_db_connection()
-                    if conn:
-                        cursor = conn.cursor()
+            # Tabla con selección activada
+            event = st.dataframe(
+                df_view[["id", "pc", "numero_parte", "descripcion", "programa", "estatus", "consecutivo"]],
+                use_container_width=True,
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="multi-row"
+            )
+
+            selected_rows = event.selection.rows
+            
+            if selected_rows:
+                st.divider()
+                st.markdown(f"### 🚚 Generar Ruta / Actualización Masiva")
+                
+                # Obtener items seleccionados
+                selected_df = df_view.iloc[selected_rows]
+                
+                st.write(f"Has seleccionado **{len(selected_df)} materiales** para mover.")
+                with st.expander("Ver detalles de la selección", expanded=False):
+                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], use_container_width=True)
+
+                # Campos para la ruta
+                st.markdown("#### 📍 Datos de la Ruta (Opcional)")
+                col_r1, col_r2, col_r3 = st.columns(3)
+                with col_r1:
+                    destino_ruta = st.text_input("Destino / Planta:", placeholder="Ej. Planta Ramos")
+                with col_r2:
+                    vehiculo_ruta = st.text_input("Vehículo:", placeholder="Ej. Nissan NP300")
+                with col_r3:
+                    usuario_ruta = st.selectbox("Responsable de Ruta:", options=ALMACENISTAS, key="user_ruta")
+
+                col_act1, col_act2 = st.columns([2, 1])
+                with col_act1:
+                    new_status = st.selectbox("Nuevo Estatus para la selección:", options=ESTATUS_OPCIONES, index=3, key="bulk_status_select") # Index 3 es "En proceso de entrega"
+                
+                with col_act2:
+                    st.write("")
+                    st.write("")
+                    if st.button("✅ Procesar Ruta", type="primary", use_container_width=True):
+                        ids_to_update = selected_df["id"].tolist()
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
-                        # 0. Crear Ruta si hay datos
-                        route_info_str = ""
-                        if destino_ruta or vehiculo_ruta:
-                            cursor.execute('''
-                                INSERT INTO routes (timestamp, destino, vehiculo, usuario)
-                                VALUES (%s, %s, %s, %s)
-                            ''', (timestamp, destino_ruta, vehiculo_ruta, usuario_ruta))
-                            route_id = cursor.lastrowid
-                            route_info_str = f" | Ruta #{route_id}: {destino_ruta} ({vehiculo_ruta})"
+                        conn = get_db_connection()
+                        if conn:
+                            cursor = conn.cursor()
                             
-                            # Asociar items a la ruta
-                            route_items_data = [(route_id, item_id) for item_id in ids_to_update]
+                            # 0. Crear Ruta si hay datos
+                            route_info_str = ""
+                            if destino_ruta or vehiculo_ruta:
+                                cursor.execute('''
+                                    INSERT INTO routes (timestamp, destino, vehiculo, usuario, estatus)
+                                    VALUES (%s, %s, %s, %s, 'En Tránsito')
+                                ''', (timestamp, destino_ruta, vehiculo_ruta, usuario_ruta))
+                                route_id = cursor.lastrowid
+                                route_info_str = f" | Ruta #{route_id}: {destino_ruta} ({vehiculo_ruta})"
+                                
+                                # Asociar items a la ruta
+                                route_items_data = [(route_id, item_id) for item_id in ids_to_update]
+                                cursor.executemany('''
+                                    INSERT INTO route_items (route_id, item_id) VALUES (%s, %s)
+                                ''', route_items_data)
+
+                            # 1. Actualizar Inventario (Bulk Update)
+                            # Generar placeholders para la cláusula IN (%s, %s, ...)
+                            placeholders = ', '.join(['%s'] * len(ids_to_update))
+                            query = f"UPDATE inventory SET estatus = %s, ultima_actualizacion = %s WHERE id IN ({placeholders})"
+                            params = [new_status, timestamp] + ids_to_update
+                            
+                            cursor.execute(query, params)
+                            
+                            # 2. Registrar Logs (Bulk Insert)
+                            log_entries = []
+                            for item_id in ids_to_update:
+                                log_entries.append((timestamp, item_id, "CAMBIO_ESTATUS_MASIVO", f"Cambio a '{new_status}'{route_info_str}", usuario_ruta))
+                                
                             cursor.executemany('''
-                                INSERT INTO route_items (route_id, item_id) VALUES (%s, %s)
-                            ''', route_items_data)
-
-                        # 1. Actualizar Inventario (Bulk Update)
-                        # Generar placeholders para la cláusula IN (%s, %s, ...)
-                        placeholders = ', '.join(['%s'] * len(ids_to_update))
-                        query = f"UPDATE inventory SET estatus = %s, ultima_actualizacion = %s WHERE id IN ({placeholders})"
-                        params = [new_status, timestamp] + ids_to_update
-                        
-                        cursor.execute(query, params)
-                        
-                        # 2. Registrar Logs (Bulk Insert)
-                        log_entries = []
-                        for item_id in ids_to_update:
-                            log_entries.append((timestamp, item_id, "CAMBIO_ESTATUS_MASIVO", f"Cambio a '{new_status}'{route_info_str}", usuario_ruta))
+                                INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
+                                VALUES (%s, %s, %s, %s, %s)
+                            ''', log_entries)
                             
-                        cursor.executemany('''
-                            INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
-                            VALUES (%s, %s, %s, %s, %s)
-                        ''', log_entries)
-                        
-                        conn.commit()
-                        conn.close()
-                        
-                        st.success(f"✅ Se actualizaron {len(ids_to_update)} ítems a '{new_status}' correctamente.")
-                        time.sleep(1.5)
-                        st.rerun()
-        else:
-            st.caption("👈 Selecciona uno o más ítems en la tabla para ver las opciones de ruta.")
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success(f"✅ Se actualizaron {len(ids_to_update)} ítems a '{new_status}' correctamente.")
+                            time.sleep(1.5)
+                            st.rerun()
+            else:
+                st.caption("👈 Selecciona uno o más ítems en la tabla para ver las opciones de ruta.")
+
+        with tab_activas:
+            st.markdown("### 🚚 Rutas en Curso")
+            st.caption("Aquí puedes ver las rutas activas y marcarlas como completadas cuando el vehículo regrese o se confirme la entrega.")
+            
+            conn = get_db_connection()
+            if conn:
+                try:
+                    # Consultar rutas activas (no completadas)
+                    query_routes = """
+                        SELECT id, timestamp, destino, vehiculo, usuario 
+                        FROM routes 
+                        WHERE estatus IS NULL OR estatus != 'Completada'
+                        ORDER BY timestamp DESC
+                    """
+                    df_active_routes = pd.read_sql_query(query_routes, conn)
+                    
+                    if not df_active_routes.empty:
+                        for index, route in df_active_routes.iterrows():
+                            # Formatear fecha
+                            try:
+                                fecha_str = pd.to_datetime(route['timestamp']).strftime("%m/%d/%Y %I:%M %p")
+                            except:
+                                fecha_str = str(route['timestamp'])
+
+                            with st.container(border=True):
+                                c1, c2, c3 = st.columns([3, 1, 1])
+                                with c1:
+                                    st.markdown(f"**Ruta #{route['id']}** | 📍 {route['destino']}")
+                                    st.caption(f"🚛 {route['vehiculo']} | 👤 {route['usuario']} | 🕒 Salida: {fecha_str}")
+                                
+                                # Consultar items de esta ruta
+                                query_items = f"""
+                                    SELECT i.pc, i.numero_parte, i.descripcion, i.cantidad, i.estatus 
+                                    FROM route_items ri
+                                    JOIN inventory i ON ri.item_id = i.id
+                                    WHERE ri.route_id = {route['id']}
+                                """
+                                df_route_items = pd.read_sql_query(query_items, conn)
+                                
+                                with c2:
+                                    st.metric("Items", len(df_route_items))
+                                
+                                with c3:
+                                    # Botón grande para terminar ruta
+                                    if st.button("✅ Terminar Ruta", key=f"btn_finish_{route['id']}", use_container_width=True, type="primary"):
+                                        cursor = conn.cursor()
+                                        timestamp_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                        
+                                        # 1. Marcar ruta como completada
+                                        cursor.execute("UPDATE routes SET estatus = 'Completada' WHERE id = %s", (route['id'],))
+                                        
+                                        # 2. Actualizar items a "Entregado a Planta"
+                                        cursor.execute("""
+                                            UPDATE inventory i 
+                                            JOIN route_items ri ON i.id = ri.item_id 
+                                            SET i.estatus = 'Entregado a Planta', i.ultima_actualizacion = %s
+                                            WHERE ri.route_id = %s
+                                        """, (timestamp_now, route['id']))
+                                        
+                                        # 3. Log de cierre
+                                        cursor.execute("""
+                                            INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
+                                            VALUES (%s, %s, %s, %s, %s)
+                                        """, (timestamp_now, f"RUTA-{route['id']}", "RUTA_COMPLETADA", f"Ruta #{route['id']} finalizada.", route['usuario']))
+                                        
+                                        conn.commit()
+                                        st.toast(f"Ruta #{route['id']} completada exitosamente.")
+                                        time.sleep(1)
+                                        st.rerun()
+                                
+                                with st.expander("Ver contenido de la carga"):
+                                    st.dataframe(df_route_items, use_container_width=True)
+                    else:
+                        st.info("✅ No hay rutas pendientes. Todo ha sido entregado o no hay salidas activas.")
+                
+                except Exception as e:
+                    st.error(f"Error al cargar rutas activas: {e}")
+                finally:
+                    conn.close()
 
     # --- SECCIÓN: MONITOR TV ---
     elif section == "Monitor TV":
@@ -384,7 +471,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             c1, c2 = st.columns([3, 1])
                             with c1:
                                 st.subheader(f"📍 Ruta #{r_id} | {info_ruta['destino']}")
-                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 👤 Responsable: {info_ruta['usuario']} | 🕒 Salida: {fecha_str}")
+                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 👤 Responsable: {info_ruta['usuario']} | 🕒 Salida Aprox: {fecha_str}")
                             with c2:
                                 st.metric("Items", len(items_ruta))
                             
