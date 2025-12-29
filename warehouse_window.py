@@ -301,56 +301,81 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
     # --- SECCIÓN: MONITOR TV ---
     elif section == "Monitor TV":
-        st.markdown("### 📺 Monitor de Entradas Recientes")
+        st.markdown("### 📺 Monitor de Rutas y Salidas")
         
         auto_refresh = st.checkbox("🔄 Auto-refrescar (Modo TV)", value=False)
         
-        # Filtrar lo que queremos mostrar en la TV (ej. todo lo que no esté Finalizado)
-        df_tv = df_inventory[df_inventory["estatus"] != "Finalizado"].sort_values(by="ultima_actualizacion", ascending=False)
-
         # Métricas Generales
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("En Recepción", len(df_inventory[df_inventory["estatus"] == "Recibido"]))
         m2.metric("En Mesa", len(df_inventory[df_inventory["estatus"] == "En Mesa/Clasificado"]))
         m3.metric("Por Entregar", len(df_inventory[df_inventory["estatus"] == "Etiquetado"]))
-        m4.metric("Total Activos", len(df_tv))
+        m4.metric("Total Inventario", len(df_inventory))
 
         st.divider()
 
-        # Vista tipo Carrusel (Simulada con columnas y contenedores grandes)
-        if not df_tv.empty:
-            # Mostramos los 3 más recientes destacados
-            st.markdown("#### 🔥 Últimos Movimientos")
-            
-            for i, row in df_tv.head(5).iterrows():
-                # Asignar íconos según el estatus
-                icon = "📦"
-                if row["estatus"] == "Recibido": icon = "📥"
-                elif row["estatus"] == "En Mesa/Clasificado": icon = "🧐"
-                elif row["estatus"] == "Etiquetado": icon = "🏷️"
-                elif row["estatus"] == "En proceso de entrega": icon = "🚚"
-                elif row["estatus"] == "Entregado a Planta": icon = "✅"
+        # --- VISTA POR RUTAS ---
+        conn = get_db_connection()
+        if conn:
+            try:
+                # Consultar rutas y sus items uniendo las 3 tablas
+                query = """
+                    SELECT 
+                        r.id as route_id,
+                        r.timestamp,
+                        r.destino,
+                        r.vehiculo,
+                        i.pc,
+                        i.numero_parte,
+                        i.descripcion,
+                        i.cantidad,
+                        i.estatus
+                    FROM routes r
+                    JOIN route_items ri ON r.id = ri.route_id
+                    JOIN inventory i ON ri.item_id = i.id
+                    ORDER BY r.timestamp DESC
+                    LIMIT 50
+                """
+                df_routes = pd.read_sql_query(query, conn)
+                conn.close()
 
-                color_border = "blue"
-                if row["estatus"] == "Entregado a Planta": color_border = "green"
-                elif row["estatus"] == "Recibido": color_border = "red"
-                
-                with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([1, 3, 2, 2])
-                    with c1:
-                        st.markdown(f"**PC:** {row['pc']}")
-                        st.caption(row['id'])
-                    with c2:
-                        st.markdown(f"**PT:** {row['numero_parte']}")
-                        st.write(f"{row['descripcion']}")
-                    with c3:
-                        st.markdown(f"**Programa:** {row['programa']}")
-                        st.markdown(f"**Cant:** {row['cantidad']}")
-                    with c4:
-                        st.markdown(f"### {icon} {row['estatus']}")
-                        st.caption(f"Act: {row['ultima_actualizacion']}")
-        else:
-            st.info("No hay materiales activos en el sistema.")
+                if not df_routes.empty:
+                    st.markdown("#### 🚚 Rutas en Tránsito / Recientes")
+                    
+                    # Agrupar por ID de ruta para mostrar una tarjeta por ruta
+                    unique_routes = df_routes['route_id'].unique()
+                    
+                    for r_id in unique_routes:
+                        # Filtrar items que pertenecen a esta ruta específica
+                        items_ruta = df_routes[df_routes['route_id'] == r_id]
+                        info_ruta = items_ruta.iloc[0]
+                        
+                        # Formatear fecha a Mes/Día/Año
+                        try:
+                            fecha_str = pd.to_datetime(info_ruta['timestamp']).strftime("%m/%d/%Y %I:%M %p")
+                        except:
+                            fecha_str = str(info_ruta['timestamp'])
+                        
+                        with st.container(border=True):
+                            # Encabezado de la Ruta
+                            c1, c2 = st.columns([3, 1])
+                            with c1:
+                                st.subheader(f"📍 Ruta #{r_id} | {info_ruta['destino']}")
+                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 🕒 Salida: {fecha_str}")
+                            with c2:
+                                st.metric("Items", len(items_ruta))
+                            
+                            # Tabla de items dentro de la ruta
+                            st.dataframe(
+                                items_ruta[["pc", "numero_parte", "descripcion", "cantidad", "estatus"]],
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                else:
+                    st.info("No hay rutas registradas recientemente.")
+            except Exception as e:
+                st.error(f"Error al cargar rutas: {e}")
+                if conn: conn.close()
 
         # Lógica de Auto-refresco
         if auto_refresh:
@@ -370,6 +395,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         conn.close()
 
         if not df_log.empty:
+            # Formatear fecha a Mes/Día/Año
+            if 'timestamp' in df_log.columns:
+                try:
+                    df_log['timestamp'] = pd.to_datetime(df_log['timestamp']).dt.strftime('%m/%d/%Y %I:%M %p')
+                except:
+                    pass
             st.dataframe(df_log, use_container_width=True)
             
             # Botón para descargar historial
