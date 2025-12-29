@@ -9,7 +9,7 @@ from db_connection.conn import get_db_connection # Importar la función centrali
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
-ALMACENISTAS = ["Jorge", "Fernando Prettel", "Otro"]
+ALMACENISTAS = ["Jorge", "Fernando", "Prettel"]
 
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
