@@ -4,57 +4,91 @@ import os
 from datetime import datetime
 import time
 import uuid
+import mysql.connector
+from mysql.conn import get_db_connection # Importar la función centralizada
 
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 
-def load_data(file_path):
-    """Carga la base de datos de inventario o crea una vacía si no existe."""
-    if os.path.exists(file_path):
-        try:
-            return pd.read_csv(file_path)
-        except Exception:
-            pass
+def init_db():
+    """Inicializa la base de datos y las tablas si no existen."""
+    conn = get_db_connection()
+    if not conn: return # Si la conexión falla, no hacer nada
+    cursor = conn.cursor()
     
-    # Estructura base
-    return pd.DataFrame(columns=[
-        "id", "pc", "proveedor", "factura", "consecutivo", "programa",
-        "numero_parte", "descripcion", "cantidad", "precio_unitario", "valor_total",
-        "estatus", "fecha_entrada", "ultima_actualizacion"
-    ])
+    # Tabla de inventario
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS inventory (
+            id VARCHAR(50) PRIMARY KEY,
+            pc VARCHAR(50),
+            proveedor VARCHAR(100),
+            factura VARCHAR(50),
+            consecutivo VARCHAR(50),
+            programa VARCHAR(100),
+            numero_parte VARCHAR(50),
+            descripcion TEXT,
+            cantidad DECIMAL(10,2),
+            precio_unitario DECIMAL(10,2),
+            valor_total DECIMAL(10,2),
+            estatus VARCHAR(50),
+            fecha_entrada DATETIME,
+            ultima_actualizacion DATETIME
+        )
+    ''')
+    
+    # Tabla de logs
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            timestamp DATETIME,
+            item_id VARCHAR(50),
+            accion VARCHAR(50),
+            detalle TEXT,
+            usuario VARCHAR(100)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
 
-def save_data(df, file_path):
-    """Guarda el DataFrame en CSV."""
-    df.to_csv(file_path, index=False)
+def load_data():
+    """Carga el inventario desde MySQL."""
+    conn = get_db_connection()
+    if not conn: return pd.DataFrame() # Devuelve un DF vacío si no hay conexión
+    try:
+        df = pd.read_sql_query("SELECT * FROM inventory", conn)
+    except Exception:
+        df = pd.DataFrame(columns=[
+            "id", "pc", "proveedor", "factura", "consecutivo", "programa",
+            "numero_parte", "descripcion", "cantidad", "precio_unitario", "valor_total",
+            "estatus", "fecha_entrada", "ultima_actualizacion"
+        ])
+    finally:
+        conn.close()
+    return df
 
-def log_movement(log_path, item_id, accion, detalle, usuario="Almacenista"):
-    """Registra un movimiento en el historial."""
-    new_entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "item_id": item_id,
-        "accion": accion,
-        "detalle": detalle,
-        "usuario": usuario
-    }
-    
-    if os.path.exists(log_path):
-        df_log = pd.read_csv(log_path)
-    else:
-        df_log = pd.DataFrame(columns=["timestamp", "item_id", "accion", "detalle", "usuario"])
-    
-    df_log = pd.concat([df_log, pd.DataFrame([new_entry])], ignore_index=True)
-    df_log.to_csv(log_path, index=False)
+def log_movement(item_id, accion, detalle, usuario="Almacenista"):
+    """Registra un movimiento en la tabla de logs."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db_connection()
+    if not conn: return # Si la conexión falla, no hacer nada
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
+        VALUES (%s, %s, %s, %s, %s)
+    ''', (timestamp, item_id, accion, detalle, usuario))
+    conn.commit()
+    conn.close()
 
 def render_warehouse_page(folder_manager, section="Recepción de Material"):
     st.header(f"🏭 Almacén: {section}")
 
-    # Rutas de archivos
-    db_path = folder_manager.get_warehouse_db_path()
-    log_path = folder_manager.get_warehouse_log_path()
+    # Inicializar DB (crear tablas si no existen)
+    init_db()
 
     # Cargar datos
-    df_inventory = load_data(db_path)
+    df_inventory = load_data()
 
     # --- SECCIÓN: RECEPCIÓN DE MATERIAL ---
     if section == "Recepción de Material":
@@ -116,12 +150,27 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     }
                     new_rows.append(new_row)
                     # Log
-                    log_movement(log_path, new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}")
+                    log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}")
 
                 if new_rows:
-                    df_new = pd.DataFrame(new_rows)
-                    df_inventory = pd.concat([df_inventory, df_new], ignore_index=True)
-                    save_data(df_inventory, db_path)
+                    # Insertar en base de datos
+                    conn = get_db_connection()
+                    if not conn: return # Salir si no hay conexión
+                    cursor = conn.cursor()
+                    cursor.executemany('''
+                        INSERT INTO inventory (
+                            id, pc, proveedor, factura, consecutivo, programa, 
+                            numero_parte, descripcion, cantidad, precio_unitario, 
+                            valor_total, estatus, fecha_entrada, ultima_actualizacion
+                        ) VALUES (
+                            %(id)s, %(pc)s, %(proveedor)s, %(factura)s, %(consecutivo)s, %(programa)s, 
+                            %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(precio_unitario)s, 
+                            %(valor_total)s, %(estatus)s, %(fecha_entrada)s, %(ultima_actualizacion)s
+                        )
+                    ''', new_rows)
+                    conn.commit()
+                    conn.close()
+                    
                     st.success(f"✅ Se registraron {len(new_rows)} artículos correctamente.")
                     # Limpiar el editor reiniciando el estado
                     st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Qty", "Unit Price"])
@@ -174,11 +223,20 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     idx = df_inventory[df_inventory["id"] == selected_id].index
                     if not idx.empty:
                         old_status = df_inventory.loc[idx[0], "estatus"]
-                        df_inventory.loc[idx[0], "estatus"] = new_status
-                        df_inventory.loc[idx[0], "ultima_actualizacion"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
-                        save_data(df_inventory, db_path)
-                        log_movement(log_path, selected_id, "CAMBIO_ESTATUS", f"De '{old_status}' a '{new_status}'")
+                        conn = get_db_connection()
+                        if not conn: return # Salir si no hay conexión
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE inventory 
+                            SET estatus = %s, ultima_actualizacion = %s
+                            WHERE id = %s
+                        ''', (new_status, timestamp, selected_id))
+                        conn.commit()
+                        conn.close()
+                        
+                        log_movement(selected_id, "CAMBIO_ESTATUS", f"De '{old_status}' a '{new_status}'")
                         st.toast(f"Estatus actualizado a: {new_status}")
                         time.sleep(1)
                         st.rerun()
@@ -244,8 +302,16 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     # --- SECCIÓN: HISTORIAL ---
     elif section == "Historial":
         st.subheader("Historial de Trazabilidad")
-        if os.path.exists(log_path):
-            df_log = pd.read_csv(log_path).sort_values(by="timestamp", ascending=False)
+        
+        conn = get_db_connection()
+        if not conn: return # Salir si no hay conexión
+        try:
+            df_log = pd.read_sql_query("SELECT * FROM logs ORDER BY timestamp DESC", conn)
+        except Exception:
+            df_log = pd.DataFrame()
+        conn.close()
+
+        if not df_log.empty:
             st.dataframe(df_log, use_container_width=True)
             
             # Botón para descargar historial
