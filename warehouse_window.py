@@ -230,11 +230,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         st.subheader("Gestión de Materiales y Rutas de Salida")
         
         # Definición explícita de las 3 pestañas para asegurar que se muestren
-        tab_crear, tab_activas, tab_terminadas = st.tabs([
-            "📦 Crear Nueva Ruta", 
-            "🚚 Rutas Activas", 
-            "🏁 Rutas Terminadas"
-        ])
+        tabs_list = ["📦 Crear Nueva Ruta", "🚚 Rutas Activas", "🏁 Rutas Terminadas"]
+        tab_crear, tab_activas, tab_terminadas = st.tabs(tabs_list)
 
         with tab_crear:
             # Filtros
