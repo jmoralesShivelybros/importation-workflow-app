@@ -5,6 +5,7 @@ from datetime import datetime
 import time
 import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
+from almacen.control_almacen import inicializar_db, agregar_registro_diario, obtener_historial_diario
 
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
@@ -627,7 +628,62 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
     # --- SECCIÓN: HISTORIAL ---
     elif section == "Historial":
-        st.subheader("Historial de Trazabilidad")
+        st.header("📚 Historial y Bitácora")
+
+        # --- 1. BITÁCORA DIARIA (EXCEL REPLICA) ---
+        st.subheader("📋 Bitácora Diaria (Registro Manual)")
+        
+        # Inicializar DB y Sesión
+        Session = inicializar_db()
+        session = Session()
+
+        # Formulario para agregar registros
+        with st.expander("➕ Agregar Nuevo Registro a Bitácora", expanded=False):
+            with st.form("form_bitacora"):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    consecutivo = st.text_input("Consecutivo Factura")
+                    fecha = st.date_input("Fecha", datetime.today())
+                    proveedor = st.text_input("Proveedor")
+                    shipper = st.text_input("Shipper")
+                with c2:
+                    descripcion = st.text_area("Descripción", height=100)
+                    cantidad = st.number_input("Cantidad", min_value=0.0, step=0.01)
+                    customer = st.text_input("Customer")
+                    recepcion = st.text_input("Recepción (Quién recibe)")
+                with c3:
+                    remision = st.text_input("Remisión")
+                    status = st.selectbox("Status", ["Pendiente", "Revisado", "Entregado", "Cancelado"])
+                    nombre = st.text_input("Nombre (Quién registra)")
+                    comentarios = st.text_area("Comentarios", height=100)
+                
+                if st.form_submit_button("💾 Guardar Registro"):
+                    datos = {
+                        "consecutivo_factura": consecutivo, "fecha": fecha, "descripcion": descripcion,
+                        "cantidad": cantidad, "proveedor": proveedor, "shipper": shipper,
+                        "customer": customer, "recepcion": recepcion, "remision": remision,
+                        "status": status, "comentarios": comentarios, "nombre": nombre
+                    }
+                    agregar_registro_diario(session, datos)
+                    st.success("Registro guardado exitosamente.")
+                    time.sleep(1)
+                    st.rerun()
+
+        # Tabla de Registros Diarios
+        registros = obtener_historial_diario(session)
+        if registros:
+            df_diario = pd.DataFrame([r.to_dict() for r in registros])
+            st.dataframe(df_diario, use_container_width=True)
+        else:
+            st.info("No hay registros en la bitácora diaria.")
+        
+        session.close()
+
+        st.divider()
+        
+        # --- 2. HISTORIAL DE TRAZABILIDAD (SISTEMA) ---
+        st.subheader("🔍 Historial de Trazabilidad (Sistema)")
+        st.caption("Movimientos automáticos registrados por el sistema.")
         
         conn = get_db_connection()
         if not conn: return # Salir si no hay conexión
