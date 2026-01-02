@@ -56,7 +56,8 @@ def init_db():
             timestamp DATETIME,
             destino VARCHAR(255),
             vehiculo VARCHAR(255),
-            usuario VARCHAR(100)
+            usuario VARCHAR(100),
+            estatus VARCHAR(50) DEFAULT 'En Tránsito'
         )
     ''')
     
