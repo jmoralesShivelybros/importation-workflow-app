@@ -549,7 +549,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         m1.metric("En Recepción", len(df_inventory[df_inventory["estatus"] == "Recibido"]))
         m2.metric("En Mesa", len(df_inventory[df_inventory["estatus"] == "En Mesa/Clasificado"]))
         m3.metric("Por Entregar", len(df_inventory[df_inventory["estatus"] == "Etiquetado"]))
-        m4.metric("Total Inventario", len(df_inventory))
+        total_inventario = df_inventory["cantidad"].sum() if not df_inventory.empty else 0
+        m4.metric("Total Inventario", f"{total_inventario:,.0f}")
 
         st.divider()
 
