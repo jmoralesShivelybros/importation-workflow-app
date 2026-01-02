@@ -223,7 +223,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     elif section == "Gestión y Rutas":
         st.subheader("Gestión de Materiales y Rutas de Salida")
         
-        tab_crear, tab_activas = st.tabs(["📦 Crear Nueva Ruta", "🚚 Rutas Activas"])
+        tab_crear, tab_activas, tab_terminadas = st.tabs(["📦 Crear Nueva Ruta", "🚚 Rutas Activas", "🏁 Rutas Terminadas"])
 
         with tab_crear:
             # Filtros
@@ -405,6 +405,123 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 
                 except Exception as e:
                     st.error(f"Error al cargar rutas activas: {e}")
+                finally:
+                    conn.close()
+
+        with tab_terminadas:
+            st.markdown("### 🏁 Historial de Rutas Terminadas")
+            
+            # --- Filtros ---
+            with st.container(border=True):
+                st.markdown("#### 🔍 Filtros de Búsqueda")
+                col_f1, col_f2, col_f3 = st.columns(3)
+                with col_f1:
+                    search_material = st.text_input("📦 Material (PT o Descripción):", key="hist_search_mat", placeholder="Ej. 12345")
+                with col_f2:
+                    filter_user = st.selectbox("👤 Almacenista:", options=["Todos"] + ALMACENISTAS, key="hist_filter_user")
+                with col_f3:
+                    enable_date = st.checkbox("Filtrar por Fecha", key="hist_enable_date")
+                    filter_date = st.date_input("Fecha", label_visibility="collapsed", key="hist_date_val") if enable_date else None
+
+            # --- Paginación y Consulta ---
+            ITEMS_PER_PAGE = 15
+            if 'hist_page' not in st.session_state:
+                st.session_state.hist_page = 1
+
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cursor = conn.cursor()
+                    
+                    # Construcción de Query Dinámica
+                    base_query = "FROM routes r"
+                    where_clauses = ["r.estatus = 'Completada'"]
+                    params = []
+
+                    # Filtro Material (requiere JOIN)
+                    if search_material:
+                        base_query += " JOIN route_items ri ON r.id = ri.route_id JOIN inventory i ON ri.item_id = i.id"
+                        where_clauses.append("(i.numero_parte LIKE %s OR i.descripcion LIKE %s)")
+                        params.extend([f"%{search_material}%", f"%{search_material}%"])
+                    
+                    # Filtro Usuario
+                    if filter_user and filter_user != "Todos":
+                        where_clauses.append("r.usuario = %s")
+                        params.append(filter_user)
+                    
+                    # Filtro Fecha
+                    if filter_date:
+                        where_clauses.append("DATE(r.timestamp) = %s")
+                        params.append(filter_date)
+
+                    where_str = " WHERE " + " AND ".join(where_clauses)
+
+                    # 1. Contar total de registros (para paginación)
+                    count_query = f"SELECT COUNT(DISTINCT r.id) {base_query} {where_str}"
+                    cursor.execute(count_query, tuple(params))
+                    total_routes = cursor.fetchone()[0]
+                    total_pages = (total_routes + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+                    
+                    # Validar página actual
+                    if st.session_state.hist_page > total_pages:
+                        st.session_state.hist_page = max(1, total_pages)
+                    
+                    # 2. Consultar datos paginados
+                    offset = (st.session_state.hist_page - 1) * ITEMS_PER_PAGE
+                    data_query = f"""
+                        SELECT DISTINCT r.id, r.timestamp, r.destino, r.vehiculo, r.usuario 
+                        {base_query} 
+                        {where_str} 
+                        ORDER BY r.timestamp DESC 
+                        LIMIT {ITEMS_PER_PAGE} OFFSET {offset}
+                    """
+                    
+                    # Usamos pandas para traer los resultados de la página
+                    df_routes_hist = pd.read_sql_query(data_query, conn, params=tuple(params))
+                    
+                    # --- Controles de Paginación ---
+                    col_p1, col_p2, col_p3 = st.columns([1, 3, 1])
+                    with col_p1:
+                        if st.button("◀ Anterior", disabled=st.session_state.hist_page <= 1, key="btn_prev_hist"):
+                            st.session_state.hist_page -= 1
+                            st.rerun()
+                    with col_p2:
+                        st.markdown(f"<div style='text-align: center; padding-top: 5px;'><b>Página {st.session_state.hist_page} de {max(1, total_pages)}</b> (Total: {total_routes} rutas)</div>", unsafe_allow_html=True)
+                    with col_p3:
+                        if st.button("Siguiente ▶", disabled=st.session_state.hist_page >= total_pages, key="btn_next_hist"):
+                            st.session_state.hist_page += 1
+                            st.rerun()
+                    
+                    st.divider()
+
+                    # --- Mostrar Resultados ---
+                    if not df_routes_hist.empty:
+                        for index, route in df_routes_hist.iterrows():
+                            # Formatear fecha
+                            try:
+                                fecha_str = pd.to_datetime(route['timestamp']).strftime("%d/%m/%Y %I:%M %p")
+                            except:
+                                fecha_str = str(route['timestamp'])
+
+                            with st.expander(f"✅ Ruta #{route['id']} | {route['destino']} ({fecha_str})"):
+                                c1, c2 = st.columns([3, 1])
+                                with c1:
+                                    st.caption(f"🚛 Vehículo: **{route['vehiculo']}** | 👤 Responsable: **{route['usuario']}**")
+                                
+                                # Consultar items de esta ruta específica
+                                query_items = f"""
+                                    SELECT i.pc, i.numero_parte, i.descripcion, i.cantidad, i.estatus 
+                                    FROM route_items ri
+                                    JOIN inventory i ON ri.item_id = i.id
+                                    WHERE ri.route_id = {route['id']}
+                                """
+                                df_items = pd.read_sql_query(query_items, conn)
+                                st.dataframe(df_items, use_container_width=True)
+                    else:
+                        st.info("No se encontraron rutas terminadas con los criterios seleccionados.")
+
+                except Exception as e:
+                    st.error(f"Error al cargar historial de rutas: {e}")
                 finally:
                     conn.close()
 
