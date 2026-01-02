@@ -417,6 +417,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         with tab_terminadas:
             st.markdown("### 🏁 Historial de Rutas Terminadas")
             
+            if st.button("🔄 Actualizar Historial", key="refresh_hist"):
+                st.rerun()
+            
             # --- Filtros ---
             with st.container(border=True):
                 st.markdown("#### 🔍 Filtros de Búsqueda")
@@ -530,6 +533,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.error(f"Error al cargar historial de rutas: {e}")
                 finally:
                     conn.close()
+            else:
+                st.error("⚠️ No hay conexión con la base de datos. No se puede cargar el historial.")
 
     # --- SECCIÓN: MONITOR TV ---
     elif section == "Monitor TV":
