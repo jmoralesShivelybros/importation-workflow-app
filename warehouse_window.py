@@ -80,6 +80,11 @@ def init_db():
     except Exception:
         pass
     try:
+        # Asegurar que el ID sea AUTO_INCREMENT si no lo era
+        cursor.execute("ALTER TABLE routes MODIFY id INT AUTO_INCREMENT")
+    except Exception:
+        pass
+    try:
         cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
     except Exception:
         pass
@@ -286,8 +291,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         if conn:
                             cursor = conn.cursor()
                             
-                            # 0. Crear Ruta si hay datos
-                            route_info_str = ""
+                            # 0. Crear Ruta si hay datos (Destino, Vehículo o si se seleccionó un chofer diferente al default)
+                            route_info_str = "" # Inicializar variable para evitar error si no se entra al if
                             if destino_ruta or vehiculo_ruta:
                                 cursor.execute('''
                                     INSERT INTO routes (timestamp, destino, vehiculo, usuario, estatus)
@@ -644,3 +649,5 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             )
         else:
             st.info("Aún no hay historial registrado.")
+    else:
+        st.warning(f"⚠️ Sección desconocida: '{section}'. Verifica que el nombre en el menú coincida con 'Gestión y Rutas'.")
