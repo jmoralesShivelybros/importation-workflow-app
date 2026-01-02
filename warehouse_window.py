@@ -642,24 +642,25 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             with st.form("form_bitacora"):
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    consecutivo = st.text_input("Consecutivo Factura")
+                    factura = st.text_input("Factura")
                     fecha = st.date_input("Fecha", datetime.today())
+                    n_bc = st.text_input("N BC")
                     proveedor = st.text_input("Proveedor")
                     shipper = st.text_input("Shipper")
                 with c2:
-                    descripcion = st.text_area("Descripción", height=100)
-                    cantidad = st.number_input("Cantidad", min_value=0.0, step=0.01)
                     customer = st.text_input("Customer")
-                    recepcion = st.text_input("Recepción (Quién recibe)")
-                with c3:
+                    recepcion = st.text_input("Recep")
                     remision = st.text_input("Remisión")
                     status = st.selectbox("Status", ["Pendiente", "Revisado", "Entregado", "Cancelado"])
-                    nombre = st.text_input("Nombre (Quién registra)")
+                    nombre = st.text_input("Nombre")
+                with c3:
+                    cantidad = st.number_input("Cantidad", min_value=0.0, step=0.01)
+                    descripcion = st.text_area("Descripción", height=100)
                     comentarios = st.text_area("Comentarios", height=100)
                 
                 if st.form_submit_button("💾 Guardar Registro"):
                     datos = {
-                        "consecutivo_factura": consecutivo, "fecha": fecha, "descripcion": descripcion,
+                        "factura": factura, "fecha": fecha, "n_bc": n_bc, "descripcion": descripcion,
                         "cantidad": cantidad, "proveedor": proveedor, "shipper": shipper,
                         "customer": customer, "recepcion": recepcion, "remision": remision,
                         "status": status, "comentarios": comentarios, "nombre": nombre

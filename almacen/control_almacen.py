@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Asumiendo que tienes una base compartida, si no, definimos una nueva.
 Base = declarative_base()
-
+registro_diario_almacen
 class RegistroDiarioAlmacen(Base):
     """
     Tabla que replica la estructura del Excel de almacén.
@@ -13,8 +13,9 @@ class RegistroDiarioAlmacen(Base):
     __tablename__ = 'registro_diario_almacen'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    consecutivo_factura = Column(String(100), nullable=True)
+    factura = Column(String(100), nullable=True)
     fecha = Column(Date, default=datetime.date.today)
+    n_bc = Column(String(100), nullable=True)
     descripcion = Column(Text, nullable=True)
     cantidad = Column(Float, default=0.0)
     proveedor = Column(String(200), nullable=True)
@@ -30,8 +31,9 @@ class RegistroDiarioAlmacen(Base):
     def to_dict(self):
         """Helper para convertir el objeto a diccionario (útil para dataframes/excel)"""
         return {
-            "Consecutivo Factura": self.consecutivo_factura,
+            "Factura": self.factura,
             "Fecha": self.fecha,
+            "N BC": self.n_bc,
             "Descripción": self.descripcion,
             "Cantidad": self.cantidad,
             "Proveedor": self.proveedor,
@@ -58,8 +60,9 @@ def agregar_registro_diario(session, datos_dict):
     y guarda un nuevo registro.
     """
     nuevo_registro = RegistroDiarioAlmacen(
-        consecutivo_factura=datos_dict.get('consecutivo_factura'),
+        factura=datos_dict.get('factura'),
         fecha=datos_dict.get('fecha', datetime.date.today()),
+        n_bc=datos_dict.get('n_bc'),
         descripcion=datos_dict.get('descripcion'),
         cantidad=datos_dict.get('cantidad'),
         proveedor=datos_dict.get('proveedor'),
