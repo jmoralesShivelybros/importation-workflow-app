@@ -6,13 +6,6 @@ import time
 import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
 
-try:
-    from almacen.control_almacen import inicializar_db, agregar_registro_diario, obtener_historial_diario
-except ImportError:
-    inicializar_db = None
-    agregar_registro_diario = None
-    obtener_historial_diario = None
-
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
@@ -95,6 +88,27 @@ def init_db():
         cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
     except Exception:
         pass
+
+    # Tabla de bitácora diaria (NUEVO REQUERIMIENTO)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS daily_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            factura VARCHAR(100),
+            fecha DATE,
+            n_bc VARCHAR(100),
+            descripcion TEXT,
+            cantidad DECIMAL(10,2),
+            proveedor VARCHAR(150),
+            shipper VARCHAR(100),
+            customer VARCHAR(150),
+            recepcion VARCHAR(100),
+            remision VARCHAR(100),
+            status VARCHAR(50),
+            comentarios TEXT,
+            nombre VARCHAR(150),
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
 
     conn.commit()
     conn.close()
@@ -636,60 +650,104 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     elif section == "Historial":
         st.header("📚 Historial y Bitácora")
 
-        # --- 1. BITÁCORA DIARIA (EXCEL REPLICA) ---
-        if inicializar_db is None:
-            st.error("⚠️ El módulo 'sqlalchemy' no está instalado o falló su carga.")
-            st.info("Por favor instala el paquete ejecutando: `pip install sqlalchemy`")
-            return
+        # Inicializar DB (crear tabla daily_logs si no existe)
+        init_db()
 
-        st.subheader("📋 Bitácora Diaria (Registro Manual)")
-        
-        # Inicializar DB y Sesión
-        Session = inicializar_db()
-        session = Session()
+        st.subheader("📋 Bitácora Diaria (Edición tipo Excel)")
+        st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
 
-        # Formulario para agregar registros
-        with st.expander("➕ Agregar Nuevo Registro a Bitácora", expanded=False):
-            with st.form("form_bitacora"):
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    factura = st.text_input("Factura")
-                    fecha = st.date_input("Fecha", datetime.today())
-                    n_bc = st.text_input("N BC")
-                    proveedor = st.text_input("Proveedor")
-                    shipper = st.text_input("Shipper")
-                with c2:
-                    customer = st.text_input("Customer")
-                    recepcion = st.text_input("Recep")
-                    remision = st.text_input("Remisión")
-                    status = st.selectbox("Status", ["Pendiente", "Revisado", "Entregado", "Cancelado"])
-                    nombre = st.text_input("Nombre")
-                with c3:
-                    cantidad = st.number_input("Cantidad", min_value=0.0, step=0.01)
-                    descripcion = st.text_area("Descripción", height=100)
-                    comentarios = st.text_area("Comentarios", height=100)
+        # --- Lógica de CRUD con st.data_editor ---
+        def update_daily_logs():
+            """Callback para guardar cambios en la BD cuando se edita la tabla."""
+            changes = st.session_state.get("editor_bitacora")
+            snapshot = st.session_state.get("df_bitacora_snapshot")
+            
+            if not changes or snapshot is None: return
+            
+            conn = get_db_connection()
+            if not conn: return
+            cursor = conn.cursor()
+            
+            try:
+                # 1. Insertar nuevas filas
+                if changes["added_rows"]:
+                    for row in changes["added_rows"]:
+                        # Validar fecha (si está vacía usar hoy)
+                        fecha_val = row.get("fecha")
+                        if not fecha_val:
+                            fecha_val = datetime.today().strftime('%Y-%m-%d')
+
+                        sql = '''INSERT INTO daily_logs (
+                            factura, fecha, n_bc, descripcion, cantidad, proveedor, 
+                            shipper, customer, recepcion, remision, status, comentarios, nombre
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                        vals = (
+                            row.get("factura", ""), fecha_val, row.get("n_bc", ""), 
+                            row.get("descripcion", ""), row.get("cantidad", 0), row.get("proveedor", ""),
+                            row.get("shipper", ""), row.get("customer", ""), row.get("recepcion", ""),
+                            row.get("remision", ""), row.get("status", "Pendiente"), 
+                            row.get("comentarios", ""), row.get("nombre", "")
+                        )
+                        cursor.execute(sql, vals)
                 
-                if st.form_submit_button("💾 Guardar Registro"):
-                    datos = {
-                        "factura": factura, "fecha": fecha, "n_bc": n_bc, "descripcion": descripcion,
-                        "cantidad": cantidad, "proveedor": proveedor, "shipper": shipper,
-                        "customer": customer, "recepcion": recepcion, "remision": remision,
-                        "status": status, "comentarios": comentarios, "nombre": nombre
-                    }
-                    agregar_registro_diario(session, datos)
-                    st.success("Registro guardado exitosamente.")
-                    time.sleep(1)
-                    st.rerun()
+                # 2. Actualizar filas editadas
+                if changes["edited_rows"]:
+                    for idx_str, updates in changes["edited_rows"].items():
+                        idx = int(idx_str)
+                        # Usamos el snapshot para obtener el ID real de la fila editada
+                        if idx < len(snapshot):
+                            row_id = snapshot.iloc[idx]["id"]
+                            set_clauses = []
+                            vals = []
+                            for col, val in updates.items():
+                                set_clauses.append(f"{col} = %s")
+                                vals.append(val)
+                            
+                            if set_clauses:
+                                vals.append(row_id)
+                                sql = f"UPDATE daily_logs SET {', '.join(set_clauses)} WHERE id = %s"
+                                cursor.execute(sql, tuple(vals))
+                
+                conn.commit()
+                st.toast("✅ Bitácora actualizada correctamente")
+            except Exception as e:
+                st.error(f"Error al guardar cambios: {e}")
+            finally:
+                conn.close()
 
-        # Tabla de Registros Diarios
-        registros = obtener_historial_diario(session)
-        if registros:
-            df_diario = pd.DataFrame([r.to_dict() for r in registros])
-            st.dataframe(df_diario, use_container_width=True)
+        # Cargar datos actuales
+        conn = get_db_connection()
+        if conn:
+            df_logs = pd.read_sql_query("SELECT * FROM daily_logs ORDER BY fecha DESC, id DESC", conn)
+            conn.close()
+            
+            # Configuración de columnas para el editor
+            column_cfg = {
+                "id": None, # Ocultar ID
+                "timestamp": None, # Ocultar Timestamp
+                "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
+                "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "Revisado", "Entregado", "Cancelado"], required=True),
+                "descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                "n_bc": "N BC",
+                "recepcion": "Recep",
+            }
+            
+            st.data_editor(
+                df_logs,
+                key="editor_bitacora",
+                column_config=column_cfg,
+                num_rows="dynamic", # Permite agregar filas
+                use_container_width=True,
+                hide_index=True,
+                on_change=update_daily_logs
+            )
+            
+            # Guardar snapshot para que el callback sepa qué IDs corresponden a qué filas
+            st.session_state["df_bitacora_snapshot"] = df_logs
         else:
-            st.info("No hay registros en la bitácora diaria.")
-        
-        session.close()
+            st.error("No se pudo conectar a la base de datos.")
 
         st.divider()
         
