@@ -229,7 +229,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     elif section == "Gestión y Rutas":
         st.subheader("Gestión de Materiales y Rutas de Salida")
         
-        tab_crear, tab_activas, tab_terminadas = st.tabs(["📦 Crear Nueva Ruta", "🚚 Rutas Activas", "🏁 Rutas Terminadas"])
+        # Definición explícita de las 3 pestañas para asegurar que se muestren
+        tab_crear, tab_activas, tab_terminadas = st.tabs([
+            "📦 Crear Nueva Ruta", 
+            "🚚 Rutas Activas", 
+            "🏁 Rutas Terminadas"
+        ])
 
         with tab_crear:
             # Filtros
