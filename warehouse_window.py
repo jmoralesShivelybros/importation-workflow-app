@@ -233,7 +233,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         tab_crear, tab_activas, tab_terminadas = st.tabs([
             "📦 Crear Nueva Ruta", 
             "🚚 Rutas Activas", 
-            "🏁 Rutas Terminadas"
+            "🏁 Rutas Terminadas",
+            "x"
         ])
 
         with tab_crear:
