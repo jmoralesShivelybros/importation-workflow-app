@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 
 # Asumiendo que tienes una base compartida, si no, definimos una nueva.
 Base = declarative_base()
-registro_diario_almacen
 class RegistroDiarioAlmacen(Base):
     """
     Tabla que replica la estructura del Excel de almacén.
