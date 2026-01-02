@@ -1,7 +1,10 @@
 import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Date, Text, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+try:
+    from sqlalchemy.orm import sessionmaker, declarative_base
+except ImportError:
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.ext.declarative import declarative_base
 
 # Asumiendo que tienes una base compartida, si no, definimos una nueva.
 Base = declarative_base()
@@ -63,13 +66,13 @@ def agregar_registro_diario(session, datos_dict):
         fecha=datos_dict.get('fecha', datetime.date.today()),
         n_bc=datos_dict.get('n_bc'),
         descripcion=datos_dict.get('descripcion'),
-        cantidad=datos_dict.get('cantidad'),
+        cantidad=datos_dict.get('cantidad', 0.0),
         proveedor=datos_dict.get('proveedor'),
         shipper=datos_dict.get('shipper'),
         customer=datos_dict.get('customer'),
         recepcion=datos_dict.get('recepcion'),
         remision=datos_dict.get('remision'),
-        status=datos_dict.get('status'),
+        status=datos_dict.get('status', 'Pendiente'),
         comentarios=datos_dict.get('comentarios'),
         nombre=datos_dict.get('nombre')
     )

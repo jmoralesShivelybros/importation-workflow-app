@@ -5,7 +5,13 @@ from datetime import datetime
 import time
 import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
-from almacen.control_almacen import inicializar_db, agregar_registro_diario, obtener_historial_diario
+
+try:
+    from almacen.control_almacen import inicializar_db, agregar_registro_diario, obtener_historial_diario
+except ImportError:
+    inicializar_db = None
+    agregar_registro_diario = None
+    obtener_historial_diario = None
 
 # --- Constantes ---
 PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
@@ -631,6 +637,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         st.header("📚 Historial y Bitácora")
 
         # --- 1. BITÁCORA DIARIA (EXCEL REPLICA) ---
+        if inicializar_db is None:
+            st.error("⚠️ El módulo 'sqlalchemy' no está instalado o falló su carga.")
+            st.info("Por favor instala el paquete ejecutando: `pip install sqlalchemy`")
+            return
+
         st.subheader("📋 Bitácora Diaria (Registro Manual)")
         
         # Inicializar DB y Sesión
