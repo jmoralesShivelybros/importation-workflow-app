@@ -207,7 +207,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     new_row = {
                         "id": str(uuid.uuid4())[:8], # ID corto único
                         "pc": pc_number,
-                        "proveedor": "Shively Bros", # Siempre es Shively según requerimiento
+                        "proveedor": "", 
                         "factura": invoice_number,
                         "consecutivo": consecutivo,
                         "programa": programa,
@@ -231,7 +231,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         "numero_parte": row["Code (PT)"],
                         "descripcion": row["Description"],
                         "cantidad": qty,
-                        "proveedor": "Shively Bros",
+                        "proveedor": "",
                         "status": "Pendiente",
                         "nombre": usuario_recepcion
                     })
@@ -657,7 +657,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             c1, c2 = st.columns([3, 1])
                             with c1:
                                 st.subheader(f"📍 Ruta #{r_id} | {info_ruta['destino']}")
-                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 👤 Responsable: {info_ruta['usuario']} | 🕒 Salida Aprox: {fecha_str}")
+                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 👤 Responsable: {info_ruta['usuario']}")
                             with c2:
                                 st.metric("Items", len(items_ruta))
                             
@@ -760,6 +760,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "Revisado", "Entregado", "Cancelado"], required=True),
+                "customer": st.column_config.SelectboxColumn(
+                    "Customer",
+                    options=["YCABALLERO", "LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DOROPEZA"],
+                    required=False
+                ),
                 "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 "n_bc": "PC",
