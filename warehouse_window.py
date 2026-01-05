@@ -7,7 +7,7 @@ import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
 
 # --- Constantes ---
-PROGRAMAS = ["Genv danna", "Edu prismaticos Dianei", "CSS erika", "Edu engranes Mayela", "Otro"]
+PROGRAMAS = ["Genv Danna", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 ALMACENISTAS = ["Jorge", "Fernando", "Prettel"]
 
@@ -88,6 +88,10 @@ def init_db():
         cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)")
+    except Exception:
+        pass
 
     # Tabla de bitácora diaria (NUEVO REQUERIMIENTO)
     cursor.execute('''
@@ -96,6 +100,7 @@ def init_db():
             factura VARCHAR(100),
             fecha DATE,
             n_bc VARCHAR(100),
+            numero_parte VARCHAR(100),
             descripcion TEXT,
             cantidad DECIMAL(10,2),
             proveedor VARCHAR(150),
@@ -188,6 +193,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 st.error("Por favor completa el PC, Factura y agrega al menos un artículo.")
             else:
                 new_rows = []
+                daily_log_rows = []
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
                 for index, row in edited_items.iterrows():
@@ -216,6 +222,19 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         "usuario_recepcion": usuario_recepcion
                     }
                     new_rows.append(new_row)
+                    
+                    # Preparar entrada para Bitácora (daily_logs)
+                    daily_log_rows.append({
+                        "factura": invoice_number,
+                        "fecha": timestamp.split(' ')[0],
+                        "n_bc": pc_number,
+                        "numero_parte": row["Code (PT)"],
+                        "descripcion": row["Description"],
+                        "cantidad": qty,
+                        "proveedor": "Shively Bros",
+                        "status": "Pendiente",
+                        "nombre": usuario_recepcion
+                    })
                     # Log
                     log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion)
 
@@ -237,6 +256,19 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             %(usuario_recepcion)s
                         )
                     ''', new_rows)
+                    
+                    # Insertar en Bitácora (daily_logs) automáticamente
+                    if daily_log_rows:
+                        cursor.executemany('''
+                            INSERT INTO daily_logs (
+                                factura, fecha, n_bc, numero_parte, descripcion, cantidad, 
+                                proveedor, status, nombre
+                            ) VALUES (
+                                %(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, 
+                                %(proveedor)s, %(status)s, %(nombre)s
+                            )
+                        ''', daily_log_rows)
+
                     conn.commit()
                     conn.close()
                     
@@ -678,11 +710,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             fecha_val = datetime.today().strftime('%Y-%m-%d')
 
                         sql = '''INSERT INTO daily_logs (
-                            factura, fecha, n_bc, descripcion, cantidad, proveedor, 
+                            factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, 
                             shipper, customer, recepcion, remision, status, comentarios, nombre
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                         vals = (
-                            row.get("factura", ""), fecha_val, row.get("n_bc", ""), 
+                            row.get("factura", ""), fecha_val, row.get("n_bc", ""), row.get("numero_parte", ""),
                             row.get("descripcion", ""), row.get("cantidad", 0), row.get("proveedor", ""),
                             row.get("shipper", ""), row.get("customer", ""), row.get("recepcion", ""),
                             row.get("remision", ""), row.get("status", "Pendiente"), 
@@ -730,7 +762,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "Revisado", "Entregado", "Cancelado"], required=True),
                 "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
-                "n_bc": "N BC",
+                "n_bc": "PC",
+                "numero_parte": "PT",
                 "recepcion": "Recep",
             }
             
