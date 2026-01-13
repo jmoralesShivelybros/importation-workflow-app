@@ -1,6 +1,6 @@
 import os
 from reportlab.lib.pagesizes import letter
-from datetime import datetime
+from datetime import datetime, timedelta
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_RIGHT, TA_CENTER
@@ -19,6 +19,17 @@ def get_available_templates():
         return []
     # Devuelve los nombres de archivo sin la extensión .txt
     return sorted([os.path.splitext(f)[0] for f in os.listdir(template_dir) if f.endswith('.txt')])
+
+def get_spanish_date():
+    """Devuelve la fecha actual con el mes en español."""
+    months_es = {
+        1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio",
+        7: "julio", 8: "agosto", 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+    }
+    # Ajuste de zona horaria para Saltillo, Coahuila (UTC-6)
+    # Usamos utcnow() como base y restamos 6 horas para obtener la hora local correcta
+    now = datetime.utcnow() - timedelta(hours=6)
+    return f"{now.day} de {months_es[now.month]} de {now.year}"
 
 def generate_letter_content(template_name, invoices_str):
     """
@@ -40,8 +51,7 @@ def generate_letter_content(template_name, invoices_str):
         return f"Error: No se encontró la plantilla '{template_name}.txt'."
 
     # Reemplazamos los placeholders con datos reales o dinámicos.
-    today_date = datetime.now().strftime("%d de %B de %Y")
-    
+    today_date = get_spanish_date()
     content = content.replace("[FECHA_ACTUAL]", today_date)
     content = content.replace("[NUMEROS_FACTURA]", invoices_str.replace(",", ", "))
     content = content.replace("[NOMBRE_NORMA]", template_name)
@@ -57,13 +67,29 @@ def _build_table_based_pdf(elements, styles, template_content, invoices_str):
     """
     # --- Marcadores para diferentes tipos de cartas con tabla ---
     marker1 = 'Declaro bajo protesta de decir verdad que la mercancía importada con factura y proveedor:'
-    marker2 = 'POR MEDIO DE LA PRESENTE Y BAJO PROTESTA DE DECIR VERDAD QUE LA MERCANCÍA QUE AMPARAN LA FACTURAS:'
+    marker2 = 'Por medio de la presente y bajo protesta de decir verdad que la mercancía que amparan las facturas:'
+    marker3 = 'Declaro bajo protesta de decir verdad que la mercancía importada, con facturas y proveedor:' # Para NOM-004
+
+    parts = None
+    found_marker = None
 
     if marker1 in template_content:
-        parts = template_content.split(marker1)
-    else:
-        parts = template_content.split(marker2)
+        parts = template_content.split(marker1, 1)
+        found_marker = marker1
+    elif marker3 in template_content:
+        parts = template_content.split(marker3, 1)
+        found_marker = marker3
+    elif marker2 in template_content:
+        parts = template_content.split(marker2, 1)
+        found_marker = marker2
 
+    if not found_marker:
+        print("[ERROR] CONSTRUCTOR DE TABLA LLAMADO, PERO NINGÚN MARCADOR FUE ENCONTRADO. Renderizando como texto simple.")
+        for line in template_content.strip().split('\n'):
+            if line.strip():
+                elements.append(Paragraph(line.strip(), styles['Normal']))
+        return
+        
     intro_text = parts[0]
     outro_text = parts[1] if len(parts) > 1 else ""
 
@@ -93,10 +119,7 @@ def _build_table_based_pdf(elements, styles, template_content, invoices_str):
     elements.append(Spacer(1, 12))
 
     # Volvemos a añadir el marcador que usamos para dividir
-    if marker1 in template_content:
-        elements.append(Paragraph(marker1, styles['Normal']))
-    else:
-        elements.append(Paragraph(marker2, styles['Normal']))
+    elements.append(Paragraph(found_marker, styles['Normal']))
     elements.append(Spacer(1, 12))
 
     for line in outro_text.strip().split('\n'):
@@ -104,6 +127,69 @@ def _build_table_based_pdf(elements, styles, template_content, invoices_str):
         if line.strip():
             elements.append(Paragraph(line.strip(), styles['Normal']))
             # Añadimos un espacio después de cada párrafo para mejor legibilidad
+            elements.append(Spacer(1, 6))
+
+def _build_senasica_pdf(elements, styles, template_content, invoices_str):
+    """
+    CONSTRUCTOR ESPECIAL PARA SENASICA:
+    Maneja la inserción de la tabla de forma más flexible buscando palabras clave
+    en lugar de frases exactas, para evitar errores por diferencias de texto.
+    """
+    print("[DEBUG] Usando constructor especial para SENASICA.")
+    
+    lines = template_content.split('\n')
+    intro_lines = []
+    outro_lines = []
+    split_found = False
+
+    # Buscamos la línea de corte analizando línea por línea
+    for i, line in enumerate(lines):
+        line_lower = line.lower()
+        # Si la línea contiene estas palabras clave, asumimos que es el marcador
+        if "protesta" in line_lower and "mercancía" in line_lower and ("factura" in line_lower or "facturas" in line_lower):
+            intro_lines = lines[:i+1] # Incluye la línea del marcador en la introducción
+            outro_lines = lines[i+1:]
+            split_found = True
+            break
+    
+    if not split_found:
+        # Si falla la detección inteligente, cortamos en la primera línea vacía grande o al final
+        print("[WARN] No se detectó marcador en SENASICA. Insertando tabla al final del texto actual.")
+        intro_lines = lines
+        outro_lines = []
+
+    # 1. Renderizar Introducción
+    for line in intro_lines:
+        if line.strip():
+            elements.append(Paragraph(line.strip(), styles['Normal']))
+            elements.append(Spacer(1, 6))
+
+    elements.append(Spacer(1, 12))
+
+    # 2. Construir e insertar la Tabla
+    table_data = [['PROVEEDOR', 'FACTURA']]
+    invoice_list = [inv.strip() for inv in invoices_str.split(',') if inv.strip()]
+    for invoice in invoice_list:
+        table_data.append(['SHIVELYBROS INC.', invoice])
+
+    invoice_table = Table(table_data)
+    # Reutilizamos el estilo de tabla definido anteriormente o definimos uno aquí
+    invoice_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), '#CCCCCC'),
+        ('TEXTCOLOR', (0, 0), (-1, 0), '#000000'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), '#FFFFFF'),
+        ('GRID', (0, 0), (-1, -1), 1, '#000000')
+    ]))
+    elements.append(invoice_table)
+    elements.append(Spacer(1, 12))
+
+    # 3. Renderizar Cierre (resto del texto)
+    for line in outro_lines:
+        if line.strip():
+            elements.append(Paragraph(line.strip(), styles['Normal']))
             elements.append(Spacer(1, 6))
 
 def _add_signature_block(elements, styles):
@@ -181,7 +267,7 @@ def generate_letter_pdf(template_name, invoices_str, output_path):
 
     # Fecha (Alineada a la derecha)
     print("[DEBUG] Añadiendo fecha...")
-    today_date_str = f"Saltillo, Coah. a {datetime.now().strftime('%d de %B de %Y')}"
+    today_date_str = f"Saltillo, Coah. a {get_spanish_date()}"
     elements.append(Paragraph(today_date_str, styles['RightAlign']))
     elements.append(Spacer(1, 24))
 
@@ -196,26 +282,31 @@ def generate_letter_pdf(template_name, invoices_str, output_path):
         return
 
     # Reemplazar placeholders comunes en el contenido de la plantilla
-    template_content = template_content.replace("[FECHA_ACTUAL]", datetime.now().strftime("%d de %B de %Y"))
+    template_content = template_content.replace("[FECHA_ACTUAL]", get_spanish_date())
     template_content = template_content.replace("[NUMEROS_FACTURA]", invoices_str.replace(",", ", "))
     template_content = template_content.replace("[NOMBRE_NORMA]", template_name)
 
-    # Marcadores que identifican las plantillas con tabla
-    table_marker_keyword1 = 'factura y proveedor:'
-    table_marker_keyword2 = 'mercancía que amparan las facturas:'
+    # Marcadores clave que identifican las plantillas con tabla. La detección es case-insensitive.
+    table_marker_keywords = [
+        'factura y proveedor:',           # Para NOM-050, NOM-024
+        'facturas y proveedor:',          # Para NOM-004
+        'mercancía que amparan las facturas:' # Para Carta Salud y posiblemente SENASICA
+    ]
+    
+    template_content_lower = template_content.lower()
+    use_table_builder = any(keyword in template_content_lower for keyword in table_marker_keywords)
 
-    # --- EXCEPCIÓN ESPECIAL PARA NOM-004 ---
-    # Forzamos el uso del constructor de tablas para NOM-004 para evitar problemas de detección.
-    if template_name == "NOM-004":
-        print("[DEBUG] EXCEPCIÓN: Forzando el uso de _build_table_based_pdf para NOM-004.")
-        _build_table_based_pdf(elements, styles, template_content, invoices_str)
-    elif table_marker_keyword1 in template_content or table_marker_keyword2 in template_content:
+    # Lógica de selección de constructor
+    if "senasica" in template_name.lower():
+        # Prioridad absoluta para la plantilla SENASICA
+        _build_senasica_pdf(elements, styles, template_content, invoices_str)
+    elif use_table_builder:
         # Si encuentra el marcador, usa el constructor de tablas
-        print("[DEBUG] Plantilla con tabla detectada. Usando _build_table_based_pdf.")
+        print(f"[DEBUG] Plantilla con tabla detectada para '{template_name}'. Usando _build_table_based_pdf.")
         _build_table_based_pdf(elements, styles, template_content, invoices_str)
     else:
         # Si no, usa el constructor por defecto
-        print("[DEBUG] Plantilla simple detectada. Usando _build_default_pdf.")
+        print(f"[DEBUG] Plantilla simple detectada para '{template_name}'. Usando _build_default_pdf.")
         _build_default_pdf(elements, styles, template_content, invoices_str)
 
     # Añadimos el bloque de firma estandarizado
