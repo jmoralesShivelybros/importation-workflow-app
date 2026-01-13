@@ -437,7 +437,7 @@ def generate_final_pdf(folder_manager, week_num, files, extracted_data, selected
                     "ship_to": "SuperAbrasives, Inc. (248) 348-7670\nSarah Foster\n28047 Grand Oaks Ct.\nWixom, MI 48393-3340"
                 },
                 "Certificado Saint Gobain.pdf": {
-                    "ship_to": "SAINT-GOBAIN ABRASIVES INC.\n200 E FULLERTON\nCAROL STREAM IL 60188\nUSA"
+                    "ship_to": "SAINT-GOBAIN ABRASIVES, INC\nONE NEW BOND STREET \nWORCESTER, MA 01615-0008\nUSA"
                 },
                 "TOOLINK - USMCA-2025-CERTIFICATE OF ORIGIN.pdf": {
                     "ship_to": "TOOLINK ENGINEERING INC, Todd Rued (720) 442-6610\n4699 Nautilus Court South #206\nBoulder, CO. 80301\nUSA"
@@ -564,9 +564,12 @@ def export_to_excel(data_factura, selected_cert, log_placeholder):
         cert_name = selected_cert.lower()
         destino = ""
         fraccion = ""
+        direccion_especifica = ""
+
         if "saint gobain" in cert_name:
             destino = "SAINT-GOBAIN"
             fraccion = "68042291"
+            direccion_especifica = "SAINT-GOBAIN ABRASIVES, INC ONE NEW BOND STREET WORCESTER, MA 01615-0008 USA"
         elif "superabrasivos" in cert_name:
             destino = "SUPER ABRASIVES"
             fraccion = "68042291"
@@ -582,6 +585,9 @@ def export_to_excel(data_factura, selected_cert, log_placeholder):
         ]
         rastreo_data = []
         for item in datos.get("articulos", []):
+            # Usar la dirección específica si se definió, de lo contrario usar la extraída del PDF
+            direccion_final = direccion_especifica if direccion_especifica else datos.get("direccion_destino", "").replace('\n', ' ')
+
             rastreo_data.append({
                 "Fecha": datos.get("fecha", ""),
                 "Documento": datos.get("shipper", ""),
@@ -589,7 +595,7 @@ def export_to_excel(data_factura, selected_cert, log_placeholder):
                 "UM": item.get("tipo", "PIEZA"),
                 "Descripcion": item.get("descripcion", ""),
                 "Destino": destino,
-                "Direccion": datos.get("direccion_destino", "").replace('\n', ' '), # Dirección en una sola línea
+                "Direccion": direccion_final,
                 "Programa": "",
                 "Fraccion": fraccion,
                 "Clave SAT": "31191500",
