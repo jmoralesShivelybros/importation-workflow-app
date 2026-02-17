@@ -7,9 +7,9 @@ import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
 
 # --- Constantes ---
-PROGRAMAS = ["Genv Danna", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
+PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
-ALMACENISTAS = ["Jorge", "Fernando", "Prettel"]
+ALMACENISTAS = ["Juan", "Fernando", "Prettel"]
 
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
