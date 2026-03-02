@@ -699,7 +699,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         # Inicializar DB (crear tabla daily_logs si no existe)
         init_db()
 
-        st.subheader("📋 Bitácora Diaria (Edición tipo Excel)")
+        st.subheader("📋 Bitácora Diaria")
         st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
 
         # --- Lógica de CRUD con st.data_editor ---
@@ -818,7 +818,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         st.divider()
         
         # --- 2. HISTORIAL DE TRAZABILIDAD (SISTEMA) ---
-        st.subheader("🔍 Historial de Trazabilidad (Sistema)")
+        st.subheader("🔍 Historial de Trazabilidad ")
         st.caption("Movimientos automáticos registrados por el sistema.")
         
         conn = get_db_connection()
