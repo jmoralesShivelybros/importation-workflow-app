@@ -33,7 +33,8 @@ def init_db():
             valor_total DECIMAL(10,2),
             estatus VARCHAR(50),
             fecha_entrada DATETIME,
-            ultima_actualizacion DATETIME
+            ultima_actualizacion DATETIME,
+            shipper VARCHAR(100)
         )
     ''')
     
@@ -77,6 +78,10 @@ def init_db():
         pass
     try:
         cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)")
     except Exception:
         pass
     try:
@@ -128,7 +133,7 @@ def load_data():
         df = pd.DataFrame(columns=[
             "id", "pc", "proveedor", "factura", "consecutivo", "programa",
             "numero_parte", "descripcion", "cantidad", "precio_unitario", "valor_total",
-            "estatus", "fecha_entrada", "ultima_actualizacion"
+            "estatus", "fecha_entrada", "ultima_actualizacion", "shipper"
         ])
     finally:
         conn.close()
@@ -175,11 +180,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             programa = st.selectbox("Programa / Destino:", options=PROGRAMAS)
 
         st.markdown("### Detalles de los Artículos (Tabla de la PC)")
-        st.info("Ingresa los ítems que vienen en la tabla de la PC (Code, Description, Qty, Unit Price).")
+        st.info("Ingresa los ítems que vienen en la tabla de la PC (Code, Description, Shipper, Qty, Unit Price).")
 
         # Editor de datos para ingresar múltiples líneas de la PC
         if 'items_entry' not in st.session_state:
-            st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Qty", "Unit Price"])
+            st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
 
         edited_items = st.data_editor(
             st.session_state.items_entry,
@@ -213,6 +218,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         "programa": programa,
                         "numero_parte": row["Code (PT)"],
                         "descripcion": row["Description"],
+                        "shipper": row["Shipper"],
                         "cantidad": qty,
                         "precio_unitario": price,
                         "valor_total": qty * price,
@@ -230,6 +236,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         "n_bc": pc_number,
                         "numero_parte": row["Code (PT)"],
                         "descripcion": row["Description"],
+                        "shipper": row["Shipper"],
                         "cantidad": qty,
                         "proveedor": "",
                         "status": "Pendiente",
@@ -248,12 +255,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             id, pc, proveedor, factura, consecutivo, programa, 
                             numero_parte, descripcion, cantidad, precio_unitario, 
                             valor_total, estatus, fecha_entrada, ultima_actualizacion,
-                            usuario_recepcion
+                            usuario_recepcion, shipper
                         ) VALUES (
                             %(id)s, %(pc)s, %(proveedor)s, %(factura)s, %(consecutivo)s, %(programa)s, 
                             %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(precio_unitario)s, 
                             %(valor_total)s, %(estatus)s, %(fecha_entrada)s, %(ultima_actualizacion)s,
-                            %(usuario_recepcion)s
+                            %(usuario_recepcion)s, %(shipper)s
                         )
                     ''', new_rows)
                     
@@ -262,10 +269,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         cursor.executemany('''
                             INSERT INTO daily_logs (
                                 factura, fecha, n_bc, numero_parte, descripcion, cantidad, 
-                                proveedor, status, nombre
+                                proveedor, status, nombre, shipper
                             ) VALUES (
                                 %(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, 
-                                %(proveedor)s, %(status)s, %(nombre)s
+                                %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s
                             )
                         ''', daily_log_rows)
 
@@ -274,7 +281,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     
                     st.success(f"✅ Se registraron {len(new_rows)} artículos correctamente.")
                     # Limpiar el editor reiniciando el estado
-                    st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Qty", "Unit Price"])
+                    st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
                     time.sleep(1)
                     st.rerun()
 
@@ -421,7 +428,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 
                                 # Consultar items de esta ruta
                                 query_items = f"""
-                                    SELECT i.pc, i.numero_parte, i.descripcion, i.cantidad, i.estatus 
+                                    SELECT i.pc, i.numero_parte, i.descripcion, i.cantidad, i.estatus, i.shipper 
                                     FROM route_items ri
                                     JOIN inventory i ON ri.item_id = i.id
                                     WHERE ri.route_id = {route['id']}
@@ -574,7 +581,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 
                                 # Consultar items de esta ruta específica
                                 query_items = f"""
-                                    SELECT i.pc, i.numero_parte, i.descripcion, i.cantidad, i.estatus 
+                                    SELECT i.pc, i.numero_parte, i.descripcion, i.cantidad, i.estatus, i.shipper 
                                     FROM route_items ri
                                     JOIN inventory i ON ri.item_id = i.id
                                     WHERE ri.route_id = {route['id']}
@@ -623,7 +630,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         i.numero_parte,
                         i.descripcion,
                         i.cantidad,
-                        i.estatus
+                        i.estatus,
+                        i.shipper
                     FROM routes r
                     JOIN route_items ri ON r.id = ri.route_id
                     JOIN inventory i ON ri.item_id = i.id
@@ -663,7 +671,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             
                             # Tabla de items dentro de la ruta
                             st.dataframe(
-                                items_ruta[["pc", "numero_parte", "descripcion", "cantidad", "estatus"]],
+                                items_ruta[["pc", "numero_parte", "descripcion", "cantidad", "estatus", "shipper"]],
                                 use_container_width=True,
                                 hide_index=True
                             )
