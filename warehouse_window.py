@@ -5,6 +5,7 @@ from datetime import datetime
 import time
 import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
+import numpy as np
 
 # --- Constantes ---
 PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
@@ -722,13 +723,16 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         if not fecha_val:
                             fecha_val = datetime.today().strftime('%Y-%m-%d')
 
+                        # --- FIX: Convertir cantidad a float para compatibilidad con MySQL ---
+                        cantidad_val = float(row.get("cantidad") or 0.0)
+
                         sql = '''INSERT INTO daily_logs (
                             factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, 
                             shipper, customer, recepcion, remision, status, comentarios, nombre
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                         vals = (
                             row.get("factura", ""), fecha_val, row.get("n_bc", ""), row.get("numero_parte", ""),
-                            row.get("descripcion", ""), row.get("cantidad", 0), row.get("proveedor", ""),
+                            row.get("descripcion", ""), cantidad_val, row.get("proveedor", ""),
                             row.get("shipper", ""), row.get("customer", ""), row.get("recepcion", ""),
                             row.get("remision", ""), row.get("status", "Pendiente"), 
                             row.get("comentarios", ""), row.get("nombre", "")
@@ -746,8 +750,14 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             vals = []
                             for col, val in updates.items():
                                 set_clauses.append(f"{col} = %s")
-                                vals.append(val)
-                            
+
+                                # --- FIX: Convertir tipos de numpy a nativos de Python ---
+                                processed_val = val
+                                if isinstance(val, (np.integer, np.floating)):
+                                    processed_val = val.item() # .item() convierte a tipo nativo de Python
+                                
+                                vals.append(processed_val)
+
                             if set_clauses:
                                 vals.append(row_id)
                                 sql = f"UPDATE daily_logs SET {', '.join(set_clauses)} WHERE id = %s"
