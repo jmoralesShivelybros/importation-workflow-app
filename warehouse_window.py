@@ -746,6 +746,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         # Usamos el snapshot para obtener el ID real de la fila editada
                         if idx < len(snapshot):
                             row_id = snapshot.iloc[idx]["id"]
+                            
+                            # --- FIX: Asegurar que el ID sea un tipo nativo de Python (int), no numpy.int64 ---
+                            if isinstance(row_id, (np.integer, np.floating)):
+                                row_id = row_id.item()
+
                             set_clauses = []
                             vals = []
                             for col, val in updates.items():
