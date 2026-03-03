@@ -10,7 +10,7 @@ import numpy as np
 # --- Constantes ---
 PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
-ALMACENISTAS = ["Juan", "Fernando", "Prettel"]
+ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa"]
 
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
@@ -164,132 +164,171 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
     # --- SECCIÓN: RECEPCIÓN DE MATERIAL ---
     if section == "Recepción de Material":
-        st.subheader("Registro de Entrada (PC Shively)")
+        tab1, tab2 = st.tabs(["Entrada a Inventario (Por PC)", "Registro Manual / Venta Directa"])
+
+        with tab1:
+            # --- FORMULARIO DE ENTRADA A INVENTARIO (PC) ---
+            with st.form("form_recepcion_pc", clear_on_submit=False):
+                st.subheader("Entrada a Inventario (Por PC)")
+                usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
+                col1, col2 = st.columns(2)
+                with col1:
+                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123")
+                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877")
+                with col2:
+                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005")
+                    programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
+
+                with st.container(border=True):
+                    st.markdown("###### Detalles de los Artículos")
+                    if 'items_entry' not in st.session_state:
+                        st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
+
+                    edited_items = st.data_editor(
+                        st.session_state.items_entry,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        key="editor_recepcion"
+                    )
+                    
+                    submitted_pc = st.form_submit_button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
-        # Usamos un formulario para evitar recargas innecesarias y asegurar el registro con un solo clic
-        with st.form("form_recepcion", clear_on_submit=False):
-            # Selección de usuario
-            col_u1, _ = st.columns([1, 3])
-            with col_u1:
-                usuario_recepcion = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion")
+        with tab2:
+            # --- FORMULARIO DE VENTA DIRECTA / MANUAL ---
+            with st.form("form_venta_directa", clear_on_submit=True):
+                st.subheader("Registro Manual / Venta Directa")
+                st.info("Use este formulario para ventas directas o material que no sigue una ruta de producción. Agregue múltiples registros en la tabla.")
+                
+                vd_nombre = st.selectbox("Nombre (Registra)", options=ALMACENISTAS, key="vd_nombre_multi")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123")
-                invoice_number = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877")
-            
-            with col2:
-                consecutivo = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005")
-                programa = st.selectbox("Programa / Destino:", options=PROGRAMAS)
+                with st.container(border=True):
+                    if 'items_vd' not in st.session_state:
+                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "Proveedor", "Descripcion", "Comentarios"])
 
-            st.markdown("### Detalles de los Artículos (Tabla de la PC)")
-            st.info("Ingresa los ítems que vienen en la tabla de la PC (Code, Description, Shipper, Qty, Unit Price).")
+                    edited_items_vd = st.data_editor(
+                        st.session_state.items_vd,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        column_config={
+                            "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                            "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                        },
+                        key="editor_vd"
+                    )
+                
+                submitted_vd = st.form_submit_button("Registrar en Bitácora", use_container_width=True)
 
-            # Editor de datos para ingresar múltiples líneas de la PC
-            if 'items_entry' not in st.session_state:
-                st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
-
-            edited_items = st.data_editor(
-                st.session_state.items_entry,
-                num_rows="dynamic",
-                use_container_width=True,
-                key="editor_recepcion"
-            )
-            
-            submitted = st.form_submit_button("Registrar Entrada", type="primary", use_container_width=True)
-
-        if submitted:
-            if not pc_number or not invoice_number or edited_items.empty:
-                st.error("Por favor completa el PC, Factura y agrega al menos un artículo.")
+        # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
+        if submitted_pc:
+            if not pc_number or not invoice_number_pc or edited_items.empty:
+                st.error("Para entradas de PC, completa el PC, Factura y agrega al menos un artículo.")
             else:
-                with st.spinner("Procesando entrada..."):
+                with st.spinner("Procesando entrada de PC..."):
+                    # ... (Lógica de procesamiento para entradas de PC)
+                    # Esta lógica se mantiene igual que antes
                     new_rows = []
                     daily_log_rows = []
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
                     for index, row in edited_items.iterrows():
-                        # Validar fila vacía
-                        if not row["Code (PT)"] or not row["Qty"]:
-                            continue
-
+                        if not row["Code (PT)"] or not row["Qty"]: continue
                         qty = float(row["Qty"]) if row["Qty"] else 0
                         price = float(row["Unit Price"]) if row["Unit Price"] else 0
                         
                         new_row = {
-                            "id": str(uuid.uuid4())[:8], # ID corto único
-                            "pc": pc_number,
-                            "proveedor": "", 
-                            "factura": invoice_number,
-                            "consecutivo": consecutivo,
-                            "programa": programa,
-                            "numero_parte": row["Code (PT)"],
-                            "descripcion": row["Description"],
-                            "shipper": row["Shipper"],
-                            "cantidad": qty,
-                            "precio_unitario": price,
-                            "valor_total": qty * price,
-                            "estatus": "Recibido",
-                            "fecha_entrada": timestamp,
-                            "ultima_actualizacion": timestamp,
-                            "usuario_recepcion": usuario_recepcion
+                            "id": str(uuid.uuid4())[:8], "pc": pc_number, "proveedor": "", "factura": invoice_number_pc,
+                            "consecutivo": consecutivo_pc, "programa": programa_pc, "numero_parte": row["Code (PT)"],
+                            "descripcion": row["Description"], "shipper": row["Shipper"], "cantidad": qty,
+                            "precio_unitario": price, "valor_total": qty * price, "estatus": "Recibido",
+                            "fecha_entrada": timestamp, "ultima_actualizacion": timestamp, "usuario_recepcion": usuario_recepcion_pc
                         }
                         new_rows.append(new_row)
                         
-                        # Preparar entrada para Bitácora (daily_logs)
                         daily_log_rows.append({
-                            "factura": invoice_number,
-                            "fecha": timestamp.split(' ')[0],
-                            "n_bc": pc_number,
-                            "numero_parte": row["Code (PT)"],
-                            "descripcion": row["Description"],
-                            "shipper": row["Shipper"],
-                            "cantidad": qty,
-                            "proveedor": "",
-                            "status": "Pendiente",
-                            "nombre": usuario_recepcion
+                            "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": pc_number,
+                            "numero_parte": row["Code (PT)"], "descripcion": row["Description"], "shipper": row["Shipper"],
+                            "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc
                         })
-                        # Log
-                        log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion)
+                        log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion_pc)
 
                     if new_rows:
-                        # Insertar en base de datos
                         conn = get_db_connection()
-                        if not conn: return # Salir si no hay conexión
-                        cursor = conn.cursor()
-                        cursor.executemany('''
-                            INSERT INTO inventory (
-                                id, pc, proveedor, factura, consecutivo, programa, 
-                                numero_parte, descripcion, cantidad, precio_unitario, 
-                                valor_total, estatus, fecha_entrada, ultima_actualizacion,
-                                usuario_recepcion, shipper
-                            ) VALUES (
-                                %(id)s, %(pc)s, %(proveedor)s, %(factura)s, %(consecutivo)s, %(programa)s, 
-                                %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(precio_unitario)s, 
-                                %(valor_total)s, %(estatus)s, %(fecha_entrada)s, %(ultima_actualizacion)s,
-                                %(usuario_recepcion)s, %(shipper)s
-                            )
-                        ''', new_rows)
-                        
-                        # Insertar en Bitácora (daily_logs) automáticamente
-                        if daily_log_rows:
+                        if conn:
+                            cursor = conn.cursor()
                             cursor.executemany('''
-                                INSERT INTO daily_logs (
-                                    factura, fecha, n_bc, numero_parte, descripcion, cantidad, 
-                                    proveedor, status, nombre, shipper
-                                ) VALUES (
-                                    %(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, 
-                                    %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s
-                                )
-                            ''', daily_log_rows)
+                                INSERT INTO inventory (id, pc, proveedor, factura, consecutivo, programa, numero_parte, descripcion, cantidad, precio_unitario, valor_total, estatus, fecha_entrada, ultima_actualizacion, usuario_recepcion, shipper)
+                                VALUES (%(id)s, %(pc)s, %(proveedor)s, %(factura)s, %(consecutivo)s, %(programa)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(precio_unitario)s, %(valor_total)s, %(estatus)s, %(fecha_entrada)s, %(ultima_actualizacion)s, %(usuario_recepcion)s, %(shipper)s)
+                            ''', new_rows)
+                            if daily_log_rows:
+                                cursor.executemany('''
+                                    INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper)
+                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s)
+                                ''', daily_log_rows)
+                            conn.commit()
+                            conn.close()
+                            st.success(f"✅ Se registraron {len(new_rows)} artículos en inventario.")
+                            st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
+                            time.sleep(1)
+                            st.rerun()
 
-                        conn.commit()
-                        conn.close()
+        # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 2 (VENTA DIRECTA) ---
+        if submitted_vd:
+            if edited_items_vd.empty:
+                st.error("Por favor, agregue al menos un registro en la tabla para guardar.")
+            # Check for required fields in the table
+            elif edited_items_vd["No. Factura"].isnull().all() or edited_items_vd["Descripcion"].isnull().all():
+                st.error("Para cada registro, por favor completa al menos 'No. Factura' y 'Descripción'.")
+            else:
+                with st.spinner("Registrando en bitácora..."):
+                    conn = get_db_connection()
+                    if not conn: return
+                    
+                    try:
+                        cursor = conn.cursor()
+                        timestamp = datetime.now()
                         
-                        st.success(f"✅ Se registraron {len(new_rows)} artículos correctamente.")
-                        # Limpiar el editor reiniciando el estado
-                        st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
-                        time.sleep(1)
-                        st.rerun()
+                        entries_to_insert = []
+                        for index, row in edited_items_vd.iterrows():
+                            # Skip empty rows that might be added in the editor
+                            if pd.isna(row.get("No. Factura")) or pd.isna(row.get("Descripcion")):
+                                continue
+
+                            vals = (
+                                row.get("No. Factura"),
+                                timestamp.date(),
+                                row.get("Consecutivo"),
+                                row.get("Descripcion"),
+                                row.get("Proveedor"),
+                                "Venta Directa",
+                                row.get("Comentarios"),
+                                vd_nombre # The name from the selectbox
+                            )
+                            entries_to_insert.append(vals)
+
+                        if entries_to_insert:
+                            sql = '''INSERT INTO daily_logs (
+                                        factura, fecha, n_bc, descripcion, proveedor, 
+                                        status, comentarios, nombre
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)'''
+                            
+                            cursor.executemany(sql, entries_to_insert)
+                            conn.commit()
+
+                            log_detail = f"Registro Manual en Bitácora de {len(entries_to_insert)} items."
+                            log_movement(f"BIT-BATCH", "REGISTRO_MANUAL_MASIVO", log_detail, usuario=vd_nombre)
+                            
+                            st.success(f"✅ {len(entries_to_insert)} registros guardados en la bitácora correctamente.")
+                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "Proveedor", "Descripcion", "Comentarios"])
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.warning("No se encontraron registros válidos para guardar. Asegúrate de llenar 'No. Factura' y 'Descripción'.")
+
+                    except Exception as e:
+                        st.error(f"Error al registrar en bitácora: {e}")
+                    finally:
+                        if conn.is_connected():
+                            conn.close()
 
     # --- SECCIÓN: GESTIÓN Y ESTATUS ---
     elif section == "Gestión y Rutas":
@@ -699,10 +738,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         # Inicializar DB (crear tabla daily_logs si no existe)
         init_db()
 
-        st.subheader("📋 Bitácora Diaria")
+        st.subheader("📋 Bitácora Diaria (General)")
         st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
 
-        # --- Lógica de CRUD con st.data_editor ---
+        # --- Lógica de CRUD con st.data_editor para la bitácora general ---
         def update_daily_logs():
             """Callback para guardar cambios en la BD cuando se edita la tabla."""
             changes = st.session_state.get("editor_bitacora")
@@ -778,8 +817,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         # Cargar datos actuales
         conn = get_db_connection()
         if conn:
-            df_logs = pd.read_sql_query("SELECT * FROM daily_logs ORDER BY fecha DESC, id DESC", conn)
-            conn.close()
+            df_logs_all = pd.read_sql_query("SELECT * FROM daily_logs ORDER BY fecha DESC, id DESC", conn)
             
             # Configuración de columnas para el editor
             column_cfg = {
@@ -790,7 +828,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "Revisado", "Entregado", "Cancelado"], required=True),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
-                    options=["YCABALLERO", "LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DOROPEZA"],
+                    options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
                     required=False
                 ),
                 "descripcion": st.column_config.TextColumn("Descripción", width="large"),
@@ -801,7 +839,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             }
             
             st.data_editor(
-                df_logs,
+                df_logs_all,
                 key="editor_bitacora",
                 column_config=column_cfg,
                 num_rows="dynamic", # Permite agregar filas
@@ -811,10 +849,37 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             )
             
             # Guardar snapshot para que el callback sepa qué IDs corresponden a qué filas
-            st.session_state["df_bitacora_snapshot"] = df_logs
+            st.session_state["df_bitacora_snapshot"] = df_logs_all
+
+            st.divider()
+
+            # --- NUEVA TABLA PARA VENTAS DIRECTAS ---
+            st.subheader("📈 Bitácora Diaria Ventas Directas")
+            
+            # Filtrar el dataframe en memoria para obtener solo 'Venta Directa'
+            df_ventas_directas = df_logs_all[df_logs_all['status'] == 'Venta Directa'].copy()
+
+            if not df_ventas_directas.empty:
+                # Usar un dataframe simple para visualización
+                st.dataframe(
+                    df_ventas_directas,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={ # Re-aplicar config para una mejor visualización
+                        "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None,
+                        "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
+                        "descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                        "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                        "n_bc": "Consecutivo",
+                    }
+                )
+            else:
+                st.info("No hay registros de Venta Directa en la bitácora.")
+            
+            conn.close()
         else:
             st.error("No se pudo conectar a la base de datos.")
-
+        
         st.divider()
         
         # --- 2. HISTORIAL DE TRAZABILIDAD (SISTEMA) ---
