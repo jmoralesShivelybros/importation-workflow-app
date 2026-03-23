@@ -763,10 +763,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
 
         # --- Lógica de CRUD con st.data_editor para la bitácora general ---
-        def update_daily_logs():
+        def update_daily_logs(editor_key="editor_bitacora", snapshot_key="df_bitacora_snapshot"):
             """Callback para guardar cambios en la BD cuando se edita la tabla."""
-            changes = st.session_state.get("editor_bitacora")
-            snapshot = st.session_state.get("df_bitacora_snapshot")
+            changes = st.session_state.get(editor_key)
+            snapshot = st.session_state.get(snapshot_key)
             
             if not changes or snapshot is None: return
             
@@ -786,6 +786,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         # --- FIX: Convertir cantidad a float para compatibilidad con MySQL ---
                         cantidad_val = float(row.get("cantidad") or 0.0)
 
+                        # Determinar status default según la tabla que se edita
+                        default_status = "Venta Directa" if editor_key == "editor_ventas_directas" else "Pendiente"
+                        status_val = row.get("status") or default_status
+
                         sql = '''INSERT INTO daily_logs (
                             factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, 
                             shipper, customer, recepcion, remision, status, comentarios, nombre
@@ -794,7 +798,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             row.get("factura", ""), fecha_val, row.get("n_bc", ""), row.get("numero_parte", ""),
                             row.get("descripcion", ""), cantidad_val, row.get("proveedor", ""),
                             row.get("shipper", ""), row.get("customer", ""), row.get("recepcion", ""),
-                            row.get("remision", ""), row.get("status", "Pendiente"), 
+                            row.get("remision", ""), status_val, 
                             row.get("comentarios", ""), row.get("nombre", "")
                         )
                         cursor.execute(sql, vals)
@@ -867,7 +871,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 num_rows="dynamic", # Permite agregar filas
                 use_container_width=True,
                 hide_index=True,
-                on_change=update_daily_logs
+                on_change=update_daily_logs,
+                args=["editor_bitacora", "df_bitacora_snapshot"]
             )
             
             # Guardar snapshot para que el callback sepa qué IDs corresponden a qué filas
@@ -881,22 +886,25 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             # Filtrar el dataframe en memoria para obtener solo 'Venta Directa'
             df_ventas_directas = df_logs_all[df_logs_all['status'] == 'Venta Directa'].copy()
 
-            if not df_ventas_directas.empty:
-                # Usar un dataframe simple para visualización
-                st.dataframe(
-                    df_ventas_directas,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={ # Re-aplicar config para una mejor visualización
-                        "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None,
-                        "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
-                        "descripcion": st.column_config.TextColumn("Descripción", width="large"),
-                        "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
-                        "n_bc": "Consecutivo",
-                    }
-                )
-            else:
-                st.info("No hay registros de Venta Directa en la bitácora.")
+            # Guardar snapshot para ventas directas
+            st.session_state["df_ventas_directas_snapshot"] = df_ventas_directas
+
+            st.data_editor(
+                df_ventas_directas,
+                key="editor_ventas_directas",
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None, "inventory_item_id": None,
+                    "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
+                    "descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                    "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                    "n_bc": "Consecutivo",
+                },
+                on_change=update_daily_logs,
+                args=["editor_ventas_directas", "df_ventas_directas_snapshot"]
+            )
             
             conn.close()
         else:
