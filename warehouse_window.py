@@ -98,6 +98,10 @@ def init_db():
         cursor.execute("ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)")
+    except Exception:
+        pass
 
     # Tabla de bitácora diaria (NUEVO REQUERIMIENTO)
     cursor.execute('''
@@ -117,7 +121,8 @@ def init_db():
             status VARCHAR(50),
             comentarios TEXT,
             nombre VARCHAR(150),
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            inventory_item_id VARCHAR(50)
         )
     ''')
 
@@ -235,8 +240,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         qty = float(row["Qty"]) if row["Qty"] else 0
                         price = float(row["Unit Price"]) if row["Unit Price"] else 0
                         
+                        item_id = str(uuid.uuid4())[:8]
+
                         new_row = {
-                            "id": str(uuid.uuid4())[:8], "pc": pc_number, "proveedor": "", "factura": invoice_number_pc,
+                            "id": item_id, "pc": pc_number, "proveedor": "", "factura": invoice_number_pc,
                             "consecutivo": consecutivo_pc, "programa": programa_pc, "numero_parte": row["Code (PT)"],
                             "descripcion": row["Description"], "shipper": row["Shipper"], "cantidad": qty,
                             "precio_unitario": price, "valor_total": qty * price, "estatus": "Recibido",
@@ -247,7 +254,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         daily_log_rows.append({
                             "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": pc_number,
                             "numero_parte": row["Code (PT)"], "descripcion": row["Description"], "shipper": row["Shipper"],
-                            "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc
+                            "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
+                            "inventory_item_id": item_id
                         })
                         log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion_pc)
 
@@ -261,8 +269,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             ''', new_rows)
                             if daily_log_rows:
                                 cursor.executemany('''
-                                    INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper)
-                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s)
+                                    INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper, inventory_item_id)
+                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s, %(inventory_item_id)s)
                                 ''', daily_log_rows)
                             conn.commit()
                             conn.close()
@@ -421,12 +429,18 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             params = [new_status, timestamp] + ids_to_update
                             
                             cursor.execute(query, params)
+
+                            # 2. Actualizar Bitácora Diaria (daily_logs)
+                            log_placeholders = ', '.join(['%s'] * len(ids_to_update))
+                            log_query = f"UPDATE daily_logs SET status = %s WHERE inventory_item_id IN ({log_placeholders})"
+                            log_params = [new_status] + ids_to_update
+                            cursor.execute(log_query, log_params)
                             
-                            # 2. Registrar Logs (Bulk Insert)
+                            # 3. Registrar Logs (Bulk Insert)
                             log_entries = []
                             for item_id in ids_to_update:
                                 log_entries.append((timestamp, item_id, "CAMBIO_ESTATUS_MASIVO", f"Cambio a '{new_status}'{route_info_str}", usuario_ruta))
-                                
+
                             cursor.executemany('''
                                 INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
                                 VALUES (%s, %s, %s, %s, %s)
@@ -499,13 +513,20 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                             SET i.estatus = 'Entregado a Planta', i.ultima_actualizacion = %s
                                             WHERE ri.route_id = %s
                                         """, (timestamp_now, route['id']))
-                                        
-                                        # 3. Log de cierre
+
+                                        # 3. Actualizar Bitácora Diaria (daily_logs) a "Entregado"
+                                        cursor.execute("""
+                                            UPDATE daily_logs
+                                            SET status = 'Entregado'
+                                            WHERE inventory_item_id IN (SELECT item_id FROM route_items WHERE route_id = %s)
+                                        """, (route['id'],))
+
+                                        # 4. Log de cierre
                                         cursor.execute("""
                                             INSERT INTO logs (timestamp, item_id, accion, detalle, usuario)
                                             VALUES (%s, %s, %s, %s, %s)
                                         """, (timestamp_now, f"RUTA-{route['id']}", "RUTA_COMPLETADA", f"Ruta #{route['id']} finalizada.", route['usuario']))
-                                        
+
                                         conn.commit()
                                         st.toast(f"Ruta #{route['id']} completada exitosamente.")
                                         time.sleep(1)
@@ -822,10 +843,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             # Configuración de columnas para el editor
             column_cfg = {
                 "id": None, # Ocultar ID
+                "inventory_item_id": None, # Ocultar ID de inventario
                 "timestamp": None, # Ocultar Timestamp
                 "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
-                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "Revisado", "Entregado", "Cancelado"], required=True),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
                     options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
