@@ -16,8 +16,8 @@ def get_db_connection():
 
         conn = mysql.connector.connect(
             host="gateway01.us-east-1.prod.aws.tidbcloud.com",
-            user="3jortA3asNPfVCt.root",
-            password=db_password,
+            user="39nznojtn3Kg8ML.root",
+            password=Password_db_prod,
             database="produccion",
             port=4000
         )
