@@ -110,7 +110,6 @@ def render_consumptions_report_page():
                     file_name="CSV_MODIFICADO_COMPLETO.csv",
                     mime="text/csv",
                     use_container_width=True
-                    width="stretch"
                 )
 
             # --- Botón para descargar Excel completo ---
@@ -125,7 +124,6 @@ def render_consumptions_report_page():
                     file_name="REPORTE_MODIFICADO_COMPLETO.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
-                    width="stretch"
                 )
 
             # --- Botones para descargar el archivo de errores (si existe) ---
@@ -145,7 +143,6 @@ def render_consumptions_report_page():
                         file_name="REGISTROS_NO_ENCONTRADOS.csv",
                         mime="text/csv",
                         use_container_width=True
-                        width="stretch"
                     )
                 
                 # --- Botón para descargar Excel de errores ---
@@ -159,5 +156,4 @@ def render_consumptions_report_page():
                         file_name="REGISTROS_NO_ENCONTRADOS.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
-                        width="stretch"
                     )            
