@@ -231,14 +231,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 cursor = conn.cursor()
                                 records = []
                                 
-                                # Mapeo de columnas normalizado a minúsculas
-                                df_excel.columns = [str(c).strip().lower() for c in df_excel.columns]
-                                
+                                # Función auxiliar para buscar columnas con nombres similares (Case Insensitive)
                                 def get_val(row, possible_names):
+                                    # Creamos un mapa de columnas en minúsculas para búsqueda flexible
+                                    cols_map = {c.lower(): c for c in df_excel.columns}
                                     for name in possible_names:
-                                        n = name.lower()
-                                        if n in df_excel.columns:
-                                            val = row[n]
+                                        if name.lower() in cols_map:
+                                            val = row[cols_map[name.lower()]]
                                             return val if pd.notna(val) else ""
                                     return ""
 
@@ -254,19 +253,19 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     except Exception:
                                         clean_date = datetime.now().date()
 
-                                    # Mapeo flexible de columnas (Case Insensitive gracias al pre-procesado)
+                                    # Mapeo flexible de columnas incluyendo las variaciones del usuario (CONS, CSSR, RECEP, etc.)
                                     records.append((
-                                        str(get_val(row, ["factura", "invoice", "no. factura"])),
+                                        str(get_val(row, ["Factura", "invoice", "No. Factura"])),
                                         clean_date,
-                                        str(get_val(row, ["n bc", "cons", "n_bc", "consecutivo", "pc"])),
-                                        str(get_val(row, ["pt", "no. parte", "part number", "numero_parte", "pc"])),
-                                        str(get_val(row, ["descripción", "descripcion", "description", "descripcion"])),
-                                        float(get_val(row, ["cantidad", "qty", "cantidad"]) or 0),
-                                        str(get_val(row, ["proveedor", "vendor"])),
-                                        str(get_val(row, ["shipper"])),
-                                        str(get_val(row, ["customer", "cliente", "cssr"])),
-                                        str(get_val(row, ["recepción", "recepcion", "recep"])),
-                                        str(get_val(row, ["remisión", "remision"])),
+                                        str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
+                                        str(get_val(row, ["PT", "No. Parte", "Part Number", "numero_parte", "PC"])),
+                                        str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
+                                        float(get_val(row, ["Cantidad", "QTY", "qty", "cantidad"]) or 0),
+                                        str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
+                                        str(get_val(row, ["Shipper", "shipper"])),
+                                        str(get_val(row, ["Customer", "customer", "Cliente", "CSSR"])),
+                                        str(get_val(row, ["Recepción", "recepcion", "RECEP"])),
+                                        str(get_val(row, ["Remisión", "remision"])),
                                         "Entregado", # Estatus forzado para registros antiguos
                                         "Importación masiva de historial antiguo",
                                         import_user
@@ -283,30 +282,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 conn.close()
                 except Exception as e:
                     st.error(f"Error al procesar el archivo: {e}")
-
-            # --- BOTÓN DE REINICIO DE BASE DE DATOS ---
-            st.divider()
-            with st.expander("☢️ Zona de Peligro (Pruebas)"):
-                st.warning("Esta acción borrará todas las tablas y las creará de nuevo vacías.")
-                confirm = st.checkbox("Entiendo que esto borrará TODO el historial y el inventario.")
-                if st.button("🗑️ Borrar Tablas y Reiniciar BD", type="secondary", disabled=not confirm):
-                    conn = get_db_connection()
-                    if conn:
-                        try:
-                            cursor = conn.cursor()
-                            cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
-                            tables = ["route_items", "routes", "logs", "daily_logs", "inventory"]
-                            for t in tables:
-                                cursor.execute(f"DROP TABLE IF EXISTS {t}")
-                            cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-                            conn.commit()
-                            conn.close()
-                            init_db() # Re-crear tablas vacías
-                            st.success("Base de datos reiniciada.")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error al reiniciar: {e}")
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
