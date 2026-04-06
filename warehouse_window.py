@@ -327,7 +327,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             log_movement(f"BIT-BATCH", "REGISTRO_MANUAL_MASIVO", log_detail, usuario=vd_nombre)
                             
                             st.success(f"✅ {len(entries_to_insert)} registros guardados en la bitácora correctamente.")
-                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "Proveedor", "Descripcion", "Comentarios"])
+                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
                             time.sleep(1.5)
                             st.rerun()
                         else:
@@ -851,6 +851,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "inventory_item_id": None, # Ocultar ID de inventario
                 "timestamp": None, # Ocultar Timestamp
                 "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
+                "n_bc": "PC",
+                "numero_parte": "PT",
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
                 "customer": st.column_config.SelectboxColumn(
@@ -861,8 +863,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 ),
                 "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
-                "n_bc": "PC",
-                "numero_parte": "PT",
                 "recepcion": "Recepción",
             }
             
@@ -900,10 +900,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 column_config={
                     "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None, "inventory_item_id": None,
                     "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
-                    "descripcion": st.column_config.TextColumn("Descripción", width="large"),
-                    "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                     "n_bc": "Consecutivo",
                     "numero_parte": "PT",
+                    "descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                    "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 },
                 on_change=update_daily_logs,
                 args=["editor_ventas_directas", "df_ventas_directas_snapshot"]
