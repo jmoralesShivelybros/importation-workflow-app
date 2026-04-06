@@ -244,28 +244,28 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 cursor = conn.cursor()
                                 records = []
                                 
-                                for _, row in df_excel.iterrows():
-                                    # Función auxiliar para buscar columnas con nombres similares
-                                    def get_val(possible_names):
-                                        for name in possible_names:
-                                            if name in df_excel.columns:
-                                                val = row[name]
-                                                return val if pd.notna(val) else ""
-                                        return ""
+                                # Función auxiliar para buscar columnas con nombres similares
+                                def get_val(row, possible_names):
+                                    for name in possible_names:
+                                        if name in df_excel.columns:
+                                            val = row[name]
+                                            return val if pd.notna(val) else ""
+                                    return ""
 
+                                for _, row in df_excel.iterrows():
                                     # Mapeo flexible de columnas
                                     records.append((
-                                        str(get_val(["Factura", "FACTURA", "invoice", "No. Factura"])),
-                                        get_val(["Fecha", "FECHA", "date"]) or datetime.now().date(),
-                                        str(get_val(["PC", "N BC", "Orden", "n_bc", "Consecutivo"])),
-                                        str(get_val(["PT", "No. Parte", "numero_parte", "Part Number", "No. Parte (PT)"])),
-                                        str(get_val(["Descripción", "Descripcion", "description"])),
-                                        float(get_val(["Cantidad", "QTY", "qty", "cantidad"]) or 0),
-                                        str(get_val(["Proveedor", "proveedor", "Vendor"])),
-                                        str(get_val(["Shipper", "shipper"])),
-                                        str(get_val(["Customer", "customer", "Cliente"])),
-                                        str(get_val(["Recepción", "recepcion"])),
-                                        str(get_val(["Remisión", "remision"])),
+                                        str(get_val(row, ["Factura", "FACTURA", "invoice", "No. Factura"])),
+                                        get_val(row, ["Fecha", "FECHA", "date"]) or datetime.now().date(),
+                                        str(get_val(row, ["PC", "N BC", "Orden", "n_bc", "Consecutivo"])),
+                                        str(get_val(row, ["PT", "No. Parte", "numero_parte", "Part Number", "No. Parte (PT)"])),
+                                        str(get_val(row, ["Descripción", "Descripcion", "description"])),
+                                        float(get_val(row, ["Cantidad", "QTY", "qty", "cantidad"]) or 0),
+                                        str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
+                                        str(get_val(row, ["Shipper", "shipper"])),
+                                        str(get_val(row, ["Customer", "customer", "Cliente"])),
+                                        str(get_val(row, ["Recepción", "recepcion"])),
+                                        str(get_val(row, ["Remisión", "remision"])),
                                         "Entregado", # Estatus forzado para registros antiguos
                                         "Importación masiva de historial antiguo",
                                         import_user
