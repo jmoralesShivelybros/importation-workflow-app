@@ -980,38 +980,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         
         st.divider()
         
-        # --- SECCIÓN DE MANTENIMIENTO (ZONA DE PELIGRO) ---
-        with st.expander("⚠️ Zona de Peligro: Mantenimiento"):
-            st.warning("Estas acciones borrarán TODA la información del sistema de forma permanente.")
-            
-            confirm_nuke = st.checkbox("Confirmo que deseo borrar todos los datos del inventario y bitácoras.")
-            
-            if st.button("🗑️ Vaciar Base de Datos (Reiniciar Sistema)", type="secondary", use_container_width=True, disabled=not confirm_nuke):
-                try:
-                    conn = get_db_connection()
-                    if conn:
-                        cursor = conn.cursor()
-                        cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
-                        
-                        # Opción Nuclear: Eliminar las tablas por completo
-                        tables = ["route_items", "routes", "logs", "daily_logs", "inventory"]
-                        for table in tables:
-                            cursor.execute(f"DROP TABLE IF EXISTS {table};")
-                        
-                        cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-                        
-                        # Forzamos la re-creación inmediata de las tablas
-                        init_db()
-                        conn.commit()
-                        conn.close()
-                        st.success("✅ Base de datos limpiada correctamente.")
-                        time.sleep(1)
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Error al limpiar la base de datos: {e}")
-
-        st.divider()
-        
         # --- 2. HISTORIAL DE TRAZABILIDAD (SISTEMA) ---
         st.subheader("🔍 Historial de Trazabilidad ")
         st.caption("Movimientos automáticos registrados por el sistema.")
