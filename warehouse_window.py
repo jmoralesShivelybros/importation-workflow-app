@@ -231,11 +231,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 cursor = conn.cursor()
                                 records = []
                                 
-                                # Función auxiliar para buscar columnas con nombres similares
+                                # Función auxiliar para buscar columnas con nombres similares (Case Insensitive)
                                 def get_val(row, possible_names):
+                                    # Creamos un mapa de columnas en minúsculas para búsqueda flexible
+                                    cols_map = {c.lower(): c for c in df_excel.columns}
                                     for name in possible_names:
-                                        if name in df_excel.columns:
-                                            val = row[name]
+                                        if name.lower() in cols_map:
+                                            val = row[cols_map[name.lower()]]
                                             return val if pd.notna(val) else ""
                                     return ""
 
@@ -251,18 +253,18 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     except Exception:
                                         clean_date = datetime.now().date()
 
-                                    # Mapeo flexible de columnas
+                                    # Mapeo flexible de columnas incluyendo las variaciones del usuario (CONS, CSSR, RECEP, etc.)
                                     records.append((
-                                        str(get_val(row, ["Factura", "FACTURA", "invoice", "No. Factura"])),
+                                        str(get_val(row, ["Factura", "invoice", "No. Factura"])),
                                         clean_date,
-                                        str(get_val(row, ["PC", "N BC", "Orden", "n_bc", "Consecutivo"])),
-                                        str(get_val(row, ["PT", "No. Parte", "numero_parte", "Part Number", "No. Parte (PT)"])),
-                                        str(get_val(row, ["Descripción", "Descripcion", "description"])),
+                                        str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
+                                        str(get_val(row, ["PT", "No. Parte", "Part Number", "numero_parte", "PC"])),
+                                        str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
                                         float(get_val(row, ["Cantidad", "QTY", "qty", "cantidad"]) or 0),
                                         str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
                                         str(get_val(row, ["Shipper", "shipper"])),
-                                        str(get_val(row, ["Customer", "customer", "Cliente"])),
-                                        str(get_val(row, ["Recepción", "recepcion"])),
+                                        str(get_val(row, ["Customer", "customer", "Cliente", "CSSR"])),
+                                        str(get_val(row, ["Recepción", "recepcion", "RECEP"])),
                                         str(get_val(row, ["Remisión", "remision"])),
                                         "Entregado", # Estatus forzado para registros antiguos
                                         "Importación masiva de historial antiguo",
@@ -976,6 +978,38 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         else:
             st.error("No se pudo conectar a la base de datos.")
         
+        st.divider()
+        
+        # --- SECCIÓN DE MANTENIMIENTO (ZONA DE PELIGRO) ---
+        with st.expander("⚠️ Zona de Peligro: Mantenimiento"):
+            st.warning("Estas acciones borrarán TODA la información del sistema de forma permanente.")
+            
+            confirm_nuke = st.checkbox("Confirmo que deseo borrar todos los datos del inventario y bitácoras.")
+            
+            if st.button("🗑️ Vaciar Base de Datos (Reiniciar Sistema)", type="secondary", use_container_width=True, disabled=not confirm_nuke):
+                try:
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
+                        
+                        # Opción Nuclear: Eliminar las tablas por completo
+                        tables = ["route_items", "routes", "logs", "daily_logs", "inventory"]
+                        for table in tables:
+                            cursor.execute(f"DROP TABLE IF EXISTS {table};")
+                        
+                        cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
+                        
+                        # Forzamos la re-creación inmediata de las tablas
+                        init_db()
+                        conn.commit()
+                        conn.close()
+                        st.success("✅ Base de datos limpiada correctamente.")
+                        time.sleep(1)
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error al limpiar la base de datos: {e}")
+
         st.divider()
         
         # --- 2. HISTORIAL DE TRAZABILIDAD (SISTEMA) ---
