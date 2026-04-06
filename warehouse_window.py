@@ -169,7 +169,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
     # --- SECCIÓN: RECEPCIÓN DE MATERIAL ---
     if section == "Recepción de Material":
-        tab1, tab2 = st.tabs(["Entrada a Inventario (Por PC)", "Registro Manual / Venta Directa"])
+        tab1, tab2, tab3 = st.tabs(["Entrada a Inventario (Por PC)", "Registro Manual / Venta Directa", "📤 Importar Historial (Excel)"])
 
         with tab1:
             # --- FORMULARIO DE ENTRADA A INVENTARIO (PC) ---
@@ -222,6 +222,66 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     )
                 
                 submitted_vd = st.form_submit_button("Registrar en Bitácora", use_container_width=True)
+
+        with tab3:
+            # --- IMPORTACIÓN MASIVA DESDE EXCEL ---
+            st.subheader("Importación Masiva de Recepciones Antiguas")
+            st.info("Sube un archivo Excel para cargar registros históricos. Se les asignará automáticamente el estatus **'Entregado'**.")
+            
+            import_user = st.selectbox("Usuario que realiza la importación:", options=ALMACENISTAS, key="import_user_name")
+            uploaded_file = st.file_uploader("Selecciona el archivo Excel (.xlsx)", type=["xlsx"], key="excel_importer")
+            
+            if uploaded_file:
+                try:
+                    df_excel = pd.read_excel(uploaded_file)
+                    st.write("### Vista previa del archivo")
+                    st.dataframe(df_excel.head(), use_container_width=True)
+                    
+                    if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
+                        with st.spinner("Procesando importación masiva..."):
+                            conn = get_db_connection()
+                            if conn:
+                                cursor = conn.cursor()
+                                records = []
+                                
+                                for _, row in df_excel.iterrows():
+                                    # Función auxiliar para buscar columnas con nombres similares
+                                    def get_val(possible_names):
+                                        for name in possible_names:
+                                            if name in df_excel.columns:
+                                                val = row[name]
+                                                return val if pd.notna(val) else ""
+                                        return ""
+
+                                    # Mapeo flexible de columnas
+                                    records.append((
+                                        str(get_val(["Factura", "FACTURA", "invoice", "No. Factura"])),
+                                        get_val(["Fecha", "FECHA", "date"]) or datetime.now().date(),
+                                        str(get_val(["PC", "N BC", "Orden", "n_bc", "Consecutivo"])),
+                                        str(get_val(["PT", "No. Parte", "numero_parte", "Part Number", "No. Parte (PT)"])),
+                                        str(get_val(["Descripción", "Descripcion", "description"])),
+                                        float(get_val(["Cantidad", "QTY", "qty", "cantidad"]) or 0),
+                                        str(get_val(["Proveedor", "proveedor", "Vendor"])),
+                                        str(get_val(["Shipper", "shipper"])),
+                                        str(get_val(["Customer", "customer", "Cliente"])),
+                                        str(get_val(["Recepción", "recepcion"])),
+                                        str(get_val(["Remisión", "remision"])),
+                                        "Entregado", # Estatus forzado para registros antiguos
+                                        "Importación masiva de historial antiguo",
+                                        import_user
+                                    ))
+
+                                if records:
+                                    sql = "INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                                    cursor.executemany(sql, records)
+                                    conn.commit()
+                                    log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
+                                    st.success(f"✅ Se han importado {len(records)} registros con éxito.")
+                                    time.sleep(2)
+                                    st.rerun()
+                                conn.close()
+                except Exception as e:
+                    st.error(f"Error al procesar el archivo: {e}")
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
