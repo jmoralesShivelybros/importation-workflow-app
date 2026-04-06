@@ -975,6 +975,16 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 sql = f"UPDATE daily_logs SET {', '.join(set_clauses)} WHERE id = %s"
                                 cursor.execute(sql, tuple(vals))
                 
+                # 3. Borrar filas eliminadas
+                if changes["deleted_rows"]:
+                    for idx in changes["deleted_rows"]:
+                        if idx < len(snapshot):
+                            row_id = snapshot.iloc[idx]["id"]
+                            # Convertir tipos de numpy a nativos de Python para la consulta
+                            if isinstance(row_id, (np.integer, np.floating)):
+                                row_id = row_id.item()
+                            cursor.execute("DELETE FROM daily_logs WHERE id = %s", (row_id,))
+
                 conn.commit()
                 st.toast("✅ Bitácora actualizada correctamente")
             except Exception as e:
