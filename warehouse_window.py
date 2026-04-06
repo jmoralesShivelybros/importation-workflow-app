@@ -208,7 +208,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                 with st.container(border=True):
                     if 'items_vd' not in st.session_state:
-                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "Proveedor", "Descripcion", "Comentarios"])
+                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
 
                     edited_items_vd = st.data_editor(
                         st.session_state.items_vd,
@@ -305,6 +305,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 row.get("No. Factura"),
                                 timestamp.date(),
                                 row.get("Consecutivo"),
+                                row.get("No. Parte (PT)"),
                                 row.get("Descripcion"),
                                 row.get("Proveedor"),
                                 "Venta Directa",
@@ -315,9 +316,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                         if entries_to_insert:
                             sql = '''INSERT INTO daily_logs (
-                                        factura, fecha, n_bc, descripcion, proveedor, 
+                                        factura, fecha, n_bc, numero_parte, descripcion, proveedor, 
                                         status, comentarios, nombre
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)'''
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                             
                             cursor.executemany(sql, entries_to_insert)
                             conn.commit()
@@ -902,6 +903,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                     "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                     "n_bc": "Consecutivo",
+                    "numero_parte": "PT",
                 },
                 on_change=update_daily_logs,
                 args=["editor_ventas_directas", "df_ventas_directas_snapshot"]
