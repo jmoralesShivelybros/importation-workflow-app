@@ -843,24 +843,27 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         # Cargar datos actuales
         conn = get_db_connection()
         if conn:
-            df_logs_all = pd.read_sql_query("SELECT * FROM daily_logs ORDER BY fecha DESC, id DESC", conn)
+            # Cargamos los datos y nos aseguramos de que numero_parte exista y esté en una posición visible
+            df_logs_all = pd.read_sql_query("SELECT id, fecha, numero_parte, n_bc, factura, descripcion, cantidad, proveedor, status, shipper, customer, recepcion, remision, comentarios, nombre, timestamp, inventory_item_id FROM daily_logs ORDER BY fecha DESC, id DESC", conn)
             
             # Configuración de columnas para el editor
             column_cfg = {
                 "id": None, # Ocultar ID
                 "inventory_item_id": None, # Ocultar ID de inventario
                 "timestamp": None, # Ocultar Timestamp
-                "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
-                "n_bc": "PC",
-                "numero_parte": "PT",
+                "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD", width="small"),
+                "numero_parte": st.column_config.TextColumn("PT", width="medium", help="Número de Parte"),
+                "n_bc": st.column_config.TextColumn("PC", width="small"),
+                "factura": st.column_config.TextColumn("Factura", width="small"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
-                    # TODO: Consider fetching these options dynamically from a master list or database.
                     options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
                     required=False
                 ),
+                "proveedor": st.column_config.TextColumn("Proveedor"),
+                "shipper": st.column_config.TextColumn("Shipper"),
                 "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 "recepcion": "Recepción",
@@ -899,10 +902,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 hide_index=True,
                 column_config={
                     "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None, "inventory_item_id": None,
-                    "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD"),
-                    "n_bc": "Consecutivo",
-                    "numero_parte": "PT",
+                    "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD", width="small"),
+                    "numero_parte": st.column_config.TextColumn("PT", width="medium"),
+                    "n_bc": st.column_config.TextColumn("Consecutivo", width="small"),
+                    "factura": st.column_config.TextColumn("Factura", width="small"),
                     "descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                    "proveedor": st.column_config.TextColumn("Proveedor"),
                     "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 },
                 on_change=update_daily_logs,
