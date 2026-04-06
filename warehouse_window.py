@@ -10,7 +10,7 @@ import numpy as np
 # --- Constantes ---
 PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
-ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa"]
+ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
 
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
