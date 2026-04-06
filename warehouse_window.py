@@ -259,6 +259,14 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     except Exception:
                                         clean_date = datetime.now().date()
 
+                                    # Limpieza segura de cantidad para evitar errores como 'yc'
+                                    raw_qty = get_val(row, ["Cantidad", "QTY", "qty", "cantidad"])
+                                    try:
+                                        # Si el valor está vacío o no es un número válido (ej. 'yc'), usamos 0.0
+                                        clean_qty = float(raw_qty) if raw_qty != "" else 0.0
+                                    except (ValueError, TypeError):
+                                        clean_qty = 0.0
+
                                     # Mapeo flexible de columnas incluyendo las variaciones del usuario (CONS, CSSR, RECEP, etc.)
                                     records.append((
                                         str(get_val(row, ["Factura", "invoice", "No. Factura"])),
@@ -266,7 +274,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
                                         str(get_val(row, ["PT", "PT#", "No. Parte", "Part Number", "numero_parte", "PC"])),
                                         str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
-                                        float(get_val(row, ["Cantidad", "QTY", "qty", "cantidad"]) or 0),
+                                        clean_qty,
                                         str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
                                         str(get_val(row, ["Shipper", "shipper"])),
                                         str(get_val(row, ["Customer", "customer", "Cliente", "CSSR"])),
@@ -326,8 +334,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     
                     for index, row in edited_items.iterrows():
                         if not row["Code (PT)"] or not row["Qty"]: continue
-                        qty = float(row["Qty"]) if row["Qty"] else 0
-                        price = float(row["Unit Price"]) if row["Unit Price"] else 0
+                        
+                        try:
+                            qty = float(row["Qty"]) if row["Qty"] else 0.0
+                            price = float(row["Unit Price"]) if row["Unit Price"] else 0.0
+                        except (ValueError, TypeError):
+                            qty = 0.0
+                            price = 0.0
                         
                         item_id = str(uuid.uuid4())[:8]
 
@@ -873,8 +886,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         if not fecha_val:
                             fecha_val = datetime.today().strftime('%Y-%m-%d')
 
-                        # --- FIX: Convertir cantidad a float para compatibilidad con MySQL ---
-                        cantidad_val = float(row.get("cantidad") or 0.0)
+                        # --- FIX: Conversión segura a float para evitar errores de texto ---
+                        try:
+                            cantidad_val = float(row.get("cantidad") or 0.0)
+                        except (ValueError, TypeError):
+                            cantidad_val = 0.0
 
                         # Determinar status default según la tabla que se edita
                         default_status = "Venta Directa" if editor_key == "editor_ventas_directas" else "Pendiente"
