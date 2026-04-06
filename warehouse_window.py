@@ -35,7 +35,31 @@ def init_db():
             estatus VARCHAR(50),
             fecha_entrada DATETIME,
             ultima_actualizacion DATETIME,
-            shipper VARCHAR(100)
+            shipper VARCHAR(100),
+            usuario_recepcion VARCHAR(100)
+        )
+    ''')
+
+    # Tabla de bitácora diaria (Aseguramos su creación al inicio)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS daily_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            factura VARCHAR(100),
+            fecha DATE,
+            n_bc VARCHAR(100),
+            numero_parte VARCHAR(100),
+            descripcion TEXT,
+            cantidad DECIMAL(10,2),
+            proveedor VARCHAR(150),
+            shipper VARCHAR(100),
+            customer VARCHAR(150),
+            recepcion VARCHAR(100),
+            remision VARCHAR(100),
+            status VARCHAR(50),
+            comentarios TEXT,
+            nombre VARCHAR(150),
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            inventory_item_id VARCHAR(50)
         )
     ''')
     
@@ -73,58 +97,21 @@ def init_db():
     
     # --- MIGRACIONES (Actualizar tablas existentes si faltan columnas) ---
     # Intentamos agregar las columnas nuevas. Si fallan es porque ya existen.
-    try:
-        cursor.execute("ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)")
-    except Exception:
-        pass
-    try:
-        # Asegurar que el ID sea AUTO_INCREMENT si no lo era
-        cursor.execute("ALTER TABLE routes MODIFY id INT AUTO_INCREMENT")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)")
-    except Exception:
-        pass
+    migrations = [
+        "ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)",
+        "ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)",
+        "ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)",
+        "ALTER TABLE routes MODIFY id INT AUTO_INCREMENT",
+        "ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'",
+        "ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)",
+        "ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)"
+    ]
 
-    # Tabla de bitácora diaria (NUEVO REQUERIMIENTO)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS daily_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            factura VARCHAR(100),
-            fecha DATE,
-            n_bc VARCHAR(100),
-            numero_parte VARCHAR(100),
-            descripcion TEXT,
-            cantidad DECIMAL(10,2),
-            proveedor VARCHAR(150),
-            shipper VARCHAR(100),
-            customer VARCHAR(150),
-            recepcion VARCHAR(100),
-            remision VARCHAR(100),
-            status VARCHAR(50),
-            comentarios TEXT,
-            nombre VARCHAR(150),
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            inventory_item_id VARCHAR(50)
-        )
-    ''')
+    for sql in migrations:
+        try:
+            cursor.execute(sql)
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
