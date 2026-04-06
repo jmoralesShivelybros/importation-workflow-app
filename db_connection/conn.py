@@ -18,7 +18,7 @@ def get_db_connection():
             host="gateway01.us-east-1.prod.aws.tidbcloud.com",
             user="3jortA3asNPfVCt.root",
             password=db_password,
-            database="test",
+            database="produccion",
             port=4000
         )
         return conn
