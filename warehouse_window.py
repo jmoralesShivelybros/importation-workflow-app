@@ -314,29 +314,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             else:
                 st.warning("Se requiere autorización para acceder a esta función.")
 
-        # --- ZONA DE PRUEBAS / MANTENIMIENTO ---
-        st.divider()
-        with st.expander("🛠️ Zona de Pruebas / Mantenimiento", expanded=False):
-            st.error("⚠️ **Atención:** Las siguientes acciones son irreversibles y afectarán a todos los usuarios.")
-            confirm_reset = st.checkbox("Entiendo que esto borrará TODA la información de la base de datos (Inventario, Bitácora, Logs y Rutas).", key="confirm_db_reset")
-            if st.button("🔥 Borrar Base de Datos Completamente (Reset)", type="primary", disabled=not confirm_reset, use_container_width=True):
-                conn = get_db_connection()
-                if conn:
-                    try:
-                        cursor = conn.cursor()
-                        # Borrar datos de todas las tablas principales
-                        tables = ["route_items", "routes", "logs", "daily_logs", "inventory"]
-                        for table in tables:
-                            cursor.execute(f"DELETE FROM {table}")
-                        conn.commit()
-                        st.success("✅ Base de datos reiniciada con éxito para nuevas pruebas.")
-                        time.sleep(1.5)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al reiniciar base de datos: {e}")
-                    finally:
-                        conn.close()
-
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
             if not pc_number or not invoice_number_pc or edited_items.empty:
@@ -898,7 +875,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     key="bitacora_date_range"
                 )
             with col_f2:
-                st.info("📅 Mostrando automáticamente el mes actual y el pasado para mayor rapidez.")
+                st.info("📅")
 
         # Validar el rango de fechas para la consulta SQL
         if isinstance(date_range, tuple) and len(date_range) == 2:
