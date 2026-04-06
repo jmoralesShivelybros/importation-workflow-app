@@ -215,15 +215,21 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             st.subheader("Importación Masiva de Recepciones Antiguas")
             st.info("Sube un archivo Excel para cargar registros históricos. Se les asignará automáticamente el estatus **'Entregado'**.")
             
-            import_user = st.selectbox("Usuario que realiza la importación:", options=ALMACENISTAS, key="import_user_name")
-            uploaded_file = st.file_uploader("Selecciona el archivo Excel (.xlsx)", type=["xlsx"], key="excel_importer")
+            col_imp1, col_imp2 = st.columns(2)
+            with col_imp1:
+                import_user = st.selectbox("Usuario que realiza la importación:", options=ALMACENISTAS, key="import_user_name")
+                uploaded_file = st.file_uploader("Selecciona el archivo Excel (.xlsx)", type=["xlsx"], key="excel_importer")
+            with col_imp2:
+                # Permitir elegir el estatus inicial para pruebas
+                import_status = st.selectbox("Estatus inicial para estos registros:", options=ESTATUS_OPCIONES + ["Entregado"], index=5, key="import_status_choice")
+                st.caption("Nota: 'Entregado' marcará los registros como cerrados históricamente.")
             
             if uploaded_file:
                 try:
                     df_excel = pd.read_excel(uploaded_file)
                     st.write("### Vista previa del archivo")
                     st.dataframe(df_excel.head(), width="stretch")
-                    
+
                     if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
                         with st.spinner("Procesando importación masiva..."):
                             conn = get_db_connection()
@@ -258,7 +264,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         str(get_val(row, ["Factura", "invoice", "No. Factura"])),
                                         clean_date,
                                         str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
-                                        str(get_val(row, ["PT", "No. Parte", "Part Number", "numero_parte", "PC"])),
+                                        str(get_val(row, ["PT", "PT#", "No. Parte", "Part Number", "numero_parte", "PC"])),
                                         str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
                                         float(get_val(row, ["Cantidad", "QTY", "qty", "cantidad"]) or 0),
                                         str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
@@ -266,7 +272,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         str(get_val(row, ["Customer", "customer", "Cliente", "CSSR"])),
                                         str(get_val(row, ["Recepción", "recepcion", "RECEP"])),
                                         str(get_val(row, ["Remisión", "remision"])),
-                                        "Entregado", # Estatus forzado para registros antiguos
+                                        import_status, 
                                         "Importación masiva de historial antiguo",
                                         import_user
                                     ))
@@ -282,6 +288,29 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 conn.close()
                 except Exception as e:
                     st.error(f"Error al procesar el archivo: {e}")
+
+        # --- ZONA DE PRUEBAS / MANTENIMIENTO ---
+        st.divider()
+        with st.expander("🛠️ Zona de Pruebas / Mantenimiento", expanded=False):
+            st.error("⚠️ **Atención:** Las siguientes acciones son irreversibles y afectarán a todos los usuarios.")
+            confirm_reset = st.checkbox("Entiendo que esto borrará TODA la información de la base de datos (Inventario, Bitácora, Logs y Rutas).", key="confirm_db_reset")
+            if st.button("🔥 Borrar Base de Datos Completamente (Reset)", type="primary", disabled=not confirm_reset, use_container_width=True):
+                conn = get_db_connection()
+                if conn:
+                    try:
+                        cursor = conn.cursor()
+                        # Borrar datos de todas las tablas principales
+                        tables = ["route_items", "routes", "logs", "daily_logs", "inventory"]
+                        for table in tables:
+                            cursor.execute(f"DELETE FROM {table}")
+                        conn.commit()
+                        st.success("✅ Base de datos reiniciada con éxito para nuevas pruebas.")
+                        time.sleep(1.5)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al reiniciar base de datos: {e}")
+                    finally:
+                        conn.close()
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
