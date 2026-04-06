@@ -213,89 +213,98 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         with tab3:
             # --- IMPORTACIÓN MASIVA DESDE EXCEL ---
             st.subheader("Importación Masiva de Recepciones Antiguas")
-            st.info("Sube un archivo Excel para cargar registros históricos. Se les asignará automáticamente el estatus **'Entregado'**.")
             
-            col_imp1, col_imp2 = st.columns(2)
-            with col_imp1:
-                import_user = st.selectbox("Usuario que realiza la importación:", options=ALMACENISTAS, key="import_user_name")
-                uploaded_file = st.file_uploader("Selecciona el archivo Excel (.xlsx)", type=["xlsx"], key="excel_importer")
-            with col_imp2:
-                # Permitir elegir el estatus inicial para pruebas
-                import_status = st.selectbox("Estatus inicial para estos registros:", options=ESTATUS_OPCIONES + ["Entregado"], index=5, key="import_status_choice")
-                st.caption("Nota: 'Entregado' marcará los registros como cerrados históricamente.")
+            auth_pwd = st.text_input("🔑 Ingrese la contraseña de autorización:", type="password", key="auth_import_pwd")
             
-            if uploaded_file:
-                try:
-                    df_excel = pd.read_excel(uploaded_file)
-                    st.write("### Vista previa del archivo")
-                    st.dataframe(df_excel.head(), width="stretch")
+            if auth_pwd == "0612":
+                st.success("Acceso autorizado.")
+                st.info("Sube un archivo Excel para cargar registros históricos. Se les asignará automáticamente el estatus **'Entregado'**.")
+                
+                col_imp1, col_imp2 = st.columns(2)
+                with col_imp1:
+                    import_user = st.selectbox("Usuario que realiza la importación:", options=ALMACENISTAS, key="import_user_name")
+                    uploaded_file = st.file_uploader("Selecciona el archivo Excel (.xlsx)", type=["xlsx"], key="excel_importer")
+                with col_imp2:
+                    # Permitir elegir el estatus inicial para pruebas
+                    import_status = st.selectbox("Estatus inicial para estos registros:", options=ESTATUS_OPCIONES + ["Entregado"], index=5, key="import_status_choice")
+                    st.caption("Nota: 'Entregado' marcará los registros como cerrados históricamente.")
+                
+                if uploaded_file:
+                    try:
+                        df_excel = pd.read_excel(uploaded_file)
+                        st.write("### Vista previa del archivo")
+                        st.dataframe(df_excel.head(), width="stretch")
 
-                    if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
-                        with st.spinner("Procesando importación masiva..."):
-                            conn = get_db_connection()
-                            if conn:
-                                cursor = conn.cursor()
-                                records = []
-                                
-                                # Función auxiliar para buscar columnas con nombres similares (Case Insensitive)
-                                def get_val(row, possible_names):
-                                    # Creamos un mapa de columnas en minúsculas para búsqueda flexible
-                                    cols_map = {c.lower(): c for c in df_excel.columns}
-                                    for name in possible_names:
-                                        if name.lower() in cols_map:
-                                            val = row[cols_map[name.lower()]]
-                                            return val if pd.notna(val) else ""
-                                    return ""
+                        if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
+                            with st.spinner("Procesando importación masiva..."):
+                                conn = get_db_connection()
+                                if conn:
+                                    cursor = conn.cursor()
+                                    records = []
+                                    
+                                    # Función auxiliar para buscar columnas con nombres similares (Case Insensitive)
+                                    def get_val(row, possible_names):
+                                        # Creamos un mapa de columnas en minúsculas para búsqueda flexible
+                                        cols_map = {c.lower(): c for c in df_excel.columns}
+                                        for name in possible_names:
+                                            if name.lower() in cols_map:
+                                                val = row[cols_map[name.lower()]]
+                                                return val if pd.notna(val) else ""
+                                        return ""
 
-                                for _, row in df_excel.iterrows():
-                                    # Procesar fecha para evitar error 1292 (formatos DD/MM/YY y DD/MM/YYYY)
-                                    raw_date = get_val(row, ["Fecha", "FECHA", "date"])
-                                    try:
-                                        if pd.notna(raw_date) and raw_date != "":
-                                            # pd.to_datetime con dayfirst=True maneja automáticamente '25' o '2025'
-                                            clean_date = pd.to_datetime(raw_date, dayfirst=True).date()
-                                        else:
+                                    for _, row in df_excel.iterrows():
+                                        # Procesar fecha para evitar error 1292 (formatos DD/MM/YY y DD/MM/YYYY)
+                                        raw_date = get_val(row, ["Fecha", "FECHA", "date"])
+                                        try:
+                                            if pd.notna(raw_date) and raw_date != "":
+                                                # pd.to_datetime con dayfirst=True maneja automáticamente '25' o '2025'
+                                                clean_date = pd.to_datetime(raw_date, dayfirst=True).date()
+                                            else:
+                                                clean_date = datetime.now().date()
+                                        except Exception:
                                             clean_date = datetime.now().date()
-                                    except Exception:
-                                        clean_date = datetime.now().date()
 
-                                    # Limpieza segura de cantidad para evitar errores como 'yc'
-                                    raw_qty = get_val(row, ["Cantidad", "QTY", "qty", "cantidad"])
-                                    try:
-                                        # Si el valor está vacío o no es un número válido (ej. 'yc'), usamos 0.0
-                                        clean_qty = float(raw_qty) if raw_qty != "" else 0.0
-                                    except (ValueError, TypeError):
-                                        clean_qty = 0.0
+                                        # Limpieza segura de cantidad para evitar errores como 'yc'
+                                        raw_qty = get_val(row, ["Cantidad", "QTY", "qty", "cantidad"])
+                                        try:
+                                            # Si el valor está vacío o no es un número válido (ej. 'yc'), usamos 0.0
+                                            clean_qty = float(raw_qty) if raw_qty != "" else 0.0
+                                        except (ValueError, TypeError):
+                                            clean_qty = 0.0
 
-                                    # Mapeo flexible de columnas incluyendo las variaciones del usuario (CONS, CSSR, RECEP, etc.)
-                                    records.append((
-                                        str(get_val(row, ["Factura", "invoice", "No. Factura"])),
-                                        clean_date,
-                                        str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
-                                        str(get_val(row, ["PT", "PT#", "No. Parte", "Part Number", "numero_parte", "PC"])),
-                                        str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
-                                        clean_qty,
-                                        str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
-                                        str(get_val(row, ["Shipper", "shipper"])),
-                                        str(get_val(row, ["Customer", "customer", "Cliente", "CSSR"])),
-                                        str(get_val(row, ["Recepción", "recepcion", "RECEP"])),
-                                        str(get_val(row, ["Remisión", "remision"])),
-                                        import_status, 
-                                        "Importación masiva de historial antiguo",
-                                        import_user
-                                    ))
+                                        # Mapeo flexible de columnas incluyendo las variaciones del usuario (CONS, CSSR, RECEP, etc.)
+                                        records.append((
+                                            str(get_val(row, ["Factura", "invoice", "No. Factura"])),
+                                            clean_date,
+                                            str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
+                                            str(get_val(row, ["PT", "PT#", "No. Parte", "Part Number", "numero_parte", "PC"])),
+                                            str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
+                                            clean_qty,
+                                            str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
+                                            str(get_val(row, ["Shipper", "shipper"])),
+                                            str(get_val(row, ["Customer", "customer", "Cliente", "CSSR"])),
+                                            str(get_val(row, ["Recepción", "recepcion", "RECEP"])),
+                                            str(get_val(row, ["Remisión", "remision"])),
+                                            import_status, 
+                                            "Importación masiva de historial antiguo",
+                                            import_user
+                                        ))
 
-                                if records:
-                                    sql = "INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-                                    cursor.executemany(sql, records)
-                                    conn.commit()
-                                    log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
-                                    st.success(f"✅ Se han importado {len(records)} registros con éxito.")
-                                    time.sleep(2)
-                                    st.rerun()
-                                conn.close()
-                except Exception as e:
-                    st.error(f"Error al procesar el archivo: {e}")
+                                    if records:
+                                        sql = "INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                                        cursor.executemany(sql, records)
+                                        conn.commit()
+                                        log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
+                                        st.success(f"✅ Se han importado {len(records)} registros con éxito.")
+                                        time.sleep(2)
+                                        st.rerun()
+                                    conn.close()
+                    except Exception as e:
+                        st.error(f"Error al procesar el archivo: {e}")
+            elif auth_pwd != "":
+                st.error("Contraseña incorrecta. Acceso denegado.")
+            else:
+                st.warning("Se requiere autorización para acceder a esta función.")
 
         # --- ZONA DE PRUEBAS / MANTENIMIENTO ---
         st.divider()
