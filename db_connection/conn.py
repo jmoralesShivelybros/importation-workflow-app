@@ -8,7 +8,7 @@ def get_db_connection():
     """
     try:
         try:
-            db_password = st.secrets["Password_db"]
+            db_password = st.secrets["Password_db"] 
         except Exception:
             st.error("⚠️ No se encontraron las credenciales de la base de datos.")
             st.info("Por favor configura el archivo `.streamlit/secrets.toml` con la clave `Password_db`.")

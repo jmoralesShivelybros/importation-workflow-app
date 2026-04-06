@@ -179,7 +179,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     edited_items = st.data_editor(
                         st.session_state.items_entry,
                         num_rows="dynamic",
-                        use_container_width=True,
+                        width="stretch",
                         key="editor_recepcion"
                     )
                     
@@ -200,7 +200,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     edited_items_vd = st.data_editor(
                         st.session_state.items_vd,
                         num_rows="dynamic",
-                        use_container_width=True,
+                        width="stretch",
                         column_config={
                             "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
                             "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
@@ -222,7 +222,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 try:
                     df_excel = pd.read_excel(uploaded_file)
                     st.write("### Vista previa del archivo")
-                    st.dataframe(df_excel.head(), use_container_width=True)
+                    st.dataframe(df_excel.head(), width="stretch")
                     
                     if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
                         with st.spinner("Procesando importación masiva..."):
@@ -240,10 +240,21 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     return ""
 
                                 for _, row in df_excel.iterrows():
+                                    # Procesar fecha para evitar error 1292 (formatos DD/MM/YY y DD/MM/YYYY)
+                                    raw_date = get_val(row, ["Fecha", "FECHA", "date"])
+                                    try:
+                                        if pd.notna(raw_date) and raw_date != "":
+                                            # pd.to_datetime con dayfirst=True maneja automáticamente '25' o '2025'
+                                            clean_date = pd.to_datetime(raw_date, dayfirst=True).date()
+                                        else:
+                                            clean_date = datetime.now().date()
+                                    except Exception:
+                                        clean_date = datetime.now().date()
+
                                     # Mapeo flexible de columnas
                                     records.append((
                                         str(get_val(row, ["Factura", "FACTURA", "invoice", "No. Factura"])),
-                                        get_val(row, ["Fecha", "FECHA", "date"]) or datetime.now().date(),
+                                        clean_date,
                                         str(get_val(row, ["PC", "N BC", "Orden", "n_bc", "Consecutivo"])),
                                         str(get_val(row, ["PT", "No. Parte", "numero_parte", "Part Number", "No. Parte (PT)"])),
                                         str(get_val(row, ["Descripción", "Descripcion", "description"])),
@@ -302,7 +313,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": pc_number,
                             "numero_parte": row["Code (PT)"], "descripcion": row["Description"], "shipper": row["Shipper"],
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
-                            "inventory_item_id": item_id
+                            "inventory_item_id": item_id, "customer": ""
                         })
                         log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion_pc)
 
@@ -316,8 +327,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             ''', new_rows)
                             if daily_log_rows:
                                 cursor.executemany('''
-                                    INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper, inventory_item_id)
-                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s, %(inventory_item_id)s)
+                                    INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper, inventory_item_id, customer)
+                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s, %(inventory_item_id)s, %(customer)s)
                                 ''', daily_log_rows)
                             conn.commit()
                             conn.close()
@@ -410,7 +421,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             # Tabla con selección activada
             event = st.dataframe(
                 df_view[["id", "pc", "numero_parte", "descripcion", "programa", "estatus", "consecutivo"]],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 on_select="rerun",
                 selection_mode="multi-row"
@@ -427,7 +438,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 
                 st.write(f"Has seleccionado **{len(selected_df)} materiales** para mover.")
                 with st.expander("Ver detalles de la selección", expanded=False):
-                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], use_container_width=True)
+                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], width="stretch")
 
                 # Campos para la ruta
                 st.markdown("#### 📍 Datos de la Ruta (Opcional)")
@@ -701,7 +712,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     WHERE ri.route_id = {route['id']}
                                 """
                                 df_items = pd.read_sql_query(query_items, conn)
-                                st.dataframe(df_items, use_container_width=True)
+                                st.dataframe(df_items, width="stretch")
                     else:
                         st.info("No se encontraron rutas terminadas con los criterios seleccionados.")
 
@@ -786,7 +797,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             # Tabla de items dentro de la ruta
                             st.dataframe(
                                 items_ruta[["pc", "numero_parte", "descripcion", "cantidad", "estatus", "shipper"]],
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True
                             )
                 else:
@@ -921,7 +932,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 key="editor_bitacora",
                 column_config=column_cfg,
                 num_rows="dynamic", # Permite agregar filas
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 on_change=update_daily_logs,
                 args=["editor_bitacora", "df_bitacora_snapshot"]
@@ -945,7 +956,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 df_ventas_directas,
                 key="editor_ventas_directas",
                 num_rows="dynamic",
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None, "inventory_item_id": None,
@@ -986,7 +997,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     df_log['timestamp'] = pd.to_datetime(df_log['timestamp']).dt.strftime('%m/%d/%Y %I:%M %p')
                 except:
                     pass
-            st.dataframe(df_log, use_container_width=True)
+            st.dataframe(df_log, width="stretch")
             
             # Botón para descargar historial
             csv = df_log.to_csv(index=False).encode('utf-8')
