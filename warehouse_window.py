@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
@@ -873,6 +873,26 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         st.subheader("📋 Bitácora Diaria (General)")
         st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
+        
+        # --- FILTRO DE TIEMPO (Para mantener limpio) ---
+        with st.expander("🔍 Filtros y Rango de Fechas", expanded=False):
+            col_f1, col_f2 = st.columns([2, 1])
+            with col_f1:
+                # Por defecto, últimos 60 días
+                date_range = st.date_input(
+                    "Mostrando registros entre:",
+                    value=(datetime.now() - timedelta(days=60), datetime.now()),
+                    key="bitacora_date_range"
+                )
+            with col_f2:
+                st.info("💡 Por rendimiento, se muestran los últimos 2 meses. Ajusta las fechas para ver datos más antiguos.")
+
+        # Validar el rango de fechas para la consulta SQL
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date = datetime.now() - timedelta(days=60)
+            end_date = datetime.now()
 
         # --- Lógica de CRUD con st.data_editor para la bitácora general ---
         def update_daily_logs(editor_key="editor_bitacora", snapshot_key="df_bitacora_snapshot"):
@@ -957,8 +977,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         # Cargar datos actuales
         conn = get_db_connection()
         if conn:
-            # Cargamos los datos y nos aseguramos de que numero_parte exista y esté en una posición visible
-            df_logs_all = pd.read_sql_query("SELECT id, fecha, numero_parte, n_bc, factura, descripcion, cantidad, proveedor, status, shipper, customer, recepcion, remision, comentarios, nombre, timestamp, inventory_item_id FROM daily_logs ORDER BY fecha DESC, id DESC", conn)
+            # Consulta filtrada por el rango de fechas seleccionado
+            query = """
+                SELECT id, fecha, numero_parte, n_bc, factura, descripcion, cantidad, proveedor, status, shipper, customer, recepcion, remision, comentarios, nombre, timestamp, inventory_item_id 
+                FROM daily_logs 
+                WHERE fecha BETWEEN %s AND %s 
+                ORDER BY fecha DESC, id DESC"""
+            df_logs_all = pd.read_sql_query(query, conn, params=(start_date, end_date))
             
             # Configuración de columnas para el editor
             column_cfg = {
