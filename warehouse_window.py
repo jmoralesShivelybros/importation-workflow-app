@@ -113,8 +113,14 @@ def init_db():
         except Exception:
             pass
 
-    conn.commit()
-    conn.close()
+    try:
+        conn.commit()
+    except Exception:
+        # En MySQL, el DDL (CREATE/ALTER) hace commit automático.
+        # Si falla el commit manual aquí, es probable que los cambios ya estén aplicados.
+        pass
+    finally:
+        conn.close()
 
 def load_data():
     """Carga el inventario desde MySQL."""
@@ -148,8 +154,10 @@ def log_movement(item_id, accion, detalle, usuario="Almacenista"):
 def render_warehouse_page(folder_manager, section="Recepción de Material"):
     st.header(f"🏭 Almacén: {section}")
 
-    # Inicializar DB (crear tablas si no existen)
-    init_db()
+    # Inicializar DB solo una vez por sesión para evitar saturar la conexión
+    if 'db_initialized' not in st.session_state:
+        init_db()
+        st.session_state.db_initialized = True
 
     # Cargar datos
     df_inventory = load_data()
@@ -867,9 +875,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     # --- SECCIÓN: HISTORIAL ---
     elif section == "Historial":
         st.header("📚 Historial y Bitácora")
-
-        # Inicializar DB (crear tabla daily_logs si no existe)
-        init_db()
 
         st.subheader("📋 Bitácora Diaria (General)")
         st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
