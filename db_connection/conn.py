@@ -8,7 +8,7 @@ def get_db_connection():
     """
     try:
         try:
-            db_password = st.secrets["Password_db_prod"]
+            db_password = st.secrets["Password_db"]
         except Exception:
             st.error("⚠️ No se encontraron las credenciales de la base de datos.")
             st.info("Por favor configura el archivo `.streamlit/secrets.toml` con la clave `Password_db`.")
@@ -17,7 +17,7 @@ def get_db_connection():
         conn = mysql.connector.connect(
             host="gateway01.us-east-1.prod.aws.tidbcloud.com",
             user="39nznojtn3Kg8ML.root",
-            password=Password_db_prod,
+            password=db_password,
             database="produccion",
             port=4000
         )
