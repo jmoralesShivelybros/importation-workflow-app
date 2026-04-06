@@ -854,6 +854,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
+                    # TODO: Consider fetching these options dynamically from a master list or database.
                     options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
                     required=False
                 ),
@@ -861,7 +862,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 "n_bc": "PC",
                 "numero_parte": "PT",
-                "recepcion": "Recep",
+                "recepcion": "Recepción",
             }
             
             st.data_editor(
