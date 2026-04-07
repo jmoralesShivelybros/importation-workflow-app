@@ -6,6 +6,7 @@ import time
 import uuid
 from db_connection.conn import get_db_connection # Importar la función centralizada
 import numpy as np
+import mysql.connector
 
 # --- Constantes ---
 PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
@@ -104,15 +105,21 @@ def init_db():
     if not column_exists('routes', 'usuario'): cursor.execute("ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)")
     if not column_exists('inventory', 'usuario_recepcion'): cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
     if not column_exists('inventory', 'shipper'): cursor.execute("ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)")
-    
+
     try: cursor.execute("ALTER TABLE routes MODIFY id INT AUTO_INCREMENT")
     except: pass
-    
+
     if not column_exists('routes', 'estatus'): cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
     if not column_exists('daily_logs', 'numero_parte'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)")
     if not column_exists('daily_logs', 'inventory_item_id'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)")
-    if not column_exists('daily_logs', 'pc'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)")
-
+    
+    # Migración robusta para la columna 'pc' en daily_logs
+    try:
+        cursor.execute("ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)")
+    except mysql.connector.errors.ProgrammingError as e:
+        if "Duplicate column name 'pc'" not in str(e):
+            raise # Re-lanza si es un error diferente
+            
     try:
         conn.commit()
     except Exception:
@@ -338,18 +345,22 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         
                         item_id = str(uuid.uuid4())[:8]
 
+                        # Concatenar Code (PT) en la descripción
+                        full_description = f"{row['Code (PT)']} {row['Description']}".strip() if row['Code (PT)'] else row['Description']
+
                         new_row = {
                             "id": item_id, "pc": pc_number, "proveedor": "", "factura": invoice_number_pc,
                             "consecutivo": consecutivo_pc, "programa": programa_pc, "numero_parte": row["Code (PT)"],
-                            "descripcion": row["Description"], "shipper": row["Shipper"], "cantidad": qty,
+                            "descripcion": full_description, "shipper": row["Shipper"], "cantidad": qty,
                             "precio_unitario": price, "valor_total": qty * price, "estatus": "Recibido",
                             "fecha_entrada": timestamp, "ultima_actualizacion": timestamp, "usuario_recepcion": usuario_recepcion_pc
                         }
                         new_rows.append(new_row)
                         
-                        daily_log_rows.append({
+                        daily_log_rows.append({ # Insertar en daily_logs con PT en la descripción
                             "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": consecutivo_pc, "pc": pc_number,
-                            "numero_parte": row["Code (PT)"], "descripcion": row["Description"], "shipper": row["Shipper"],
+                            "numero_parte": "", # numero_parte se guarda vacío aquí
+                            "descripcion": full_description, "shipper": row["Shipper"],
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
                             "inventory_item_id": item_id, "customer": ""
                         })
@@ -403,13 +414,17 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             if pd.isna(row.get("No. Factura")) or pd.isna(row.get("Descripcion")):
                                 continue
 
+                            pt_val = str(row.get("No. Parte (PT)", "")).strip()
+                            desc_val = str(row.get("Descripcion", "")).strip()
+                            full_desc = f"{pt_val} {desc_val}".strip() if pt_val else desc_val
+
                             vals = (
                                 row.get("No. Factura"),
                                 timestamp.date(),
                                 row.get("No. BC"),
                                 row.get("PC"),
-                                row.get("No. Parte (PT)"),
-                                row.get("Descripcion"),
+                                "", # numero_parte se guarda vacío porque ya va en la descripción
+                                full_desc,
                                 row.get("Proveedor"),
                                 "Venta Directa",
                                 row.get("Comentarios"),
@@ -418,7 +433,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             entries_to_insert.append(vals)
 
                         if entries_to_insert:
-                            sql = '''INSERT INTO daily_logs (
+                            sql = '''INSERT INTO daily_logs ( # Insertar en daily_logs con PT en la descripción
                                         factura, fecha, n_bc, pc, numero_parte, descripcion, proveedor, 
                                         status, comentarios, nombre
                                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
@@ -430,7 +445,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             log_movement(f"BIT-BATCH", "REGISTRO_MANUAL_MASIVO", log_detail, usuario=vd_nombre)
                             
                             st.success(f"✅ {len(entries_to_insert)} registros guardados en la bitácora correctamente.")
-                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
+                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
                             time.sleep(1.5)
                             st.rerun()
                         else:
@@ -985,8 +1000,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         conn = get_db_connection()
         if conn:
             # Consulta filtrada por el rango de fechas seleccionado
+            # Orden solicitado: Fecha, No. BC, Descripción, Cantidad, Proveedor, PC, Customer, Recepcion, Remision, Comentarios, Nombre
             query = """
-                SELECT `id`, `fecha`, `n_bc`, `descripcion`, `cantidad`, `proveedor`, `pc`, `customer`, `recepcion`, `remision`, `comentarios`, `nombre`, `numero_parte`, `factura`, `status`, `shipper`, `timestamp`, `inventory_item_id` 
+                SELECT `id`, `fecha`, `n_bc`, `descripcion`, `cantidad`, `proveedor`, `pc`, `customer`, `recepcion`, `remision`, `comentarios`, `nombre`, `numero_parte`, `factura`, `status`, `shipper`, `timestamp`, `inventory_item_id`
                 FROM daily_logs 
                 WHERE fecha BETWEEN %s AND %s 
                 ORDER BY fecha DESC, id DESC"""
@@ -1013,7 +1029,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "remision": "Remisión",
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 "nombre": st.column_config.TextColumn("Nombre"),
-                "numero_parte": st.column_config.TextColumn("PT", width="medium"),
+                "numero_parte": None, # Ocultar la columna PT
                 "factura": st.column_config.TextColumn("Factura Prov.", width="small"),
             }
             
