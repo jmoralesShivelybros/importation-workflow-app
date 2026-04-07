@@ -16,7 +16,7 @@ def clean_illegal_chars_for_excel(df):
     illegal_xml_chars_re = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
     
     for col in df.select_dtypes(include=['object']).columns:
-        df[col] = df[col].astype(str).apply(lambda x: illegal_xml_chars_re.sub('', x))
+        df[col] = df[col].fillna('').astype(str).apply(lambda x: illegal_xml_chars_re.sub('', x))
     return df
 
 def render_consumptions_report_page():
