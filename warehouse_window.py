@@ -44,6 +44,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS daily_logs (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            pc VARCHAR(100),
             factura VARCHAR(100),
             fecha DATE,
             n_bc VARCHAR(100),
@@ -104,7 +105,8 @@ def init_db():
         "ALTER TABLE routes MODIFY id INT AUTO_INCREMENT",
         "ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'",
         "ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)",
-        "ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)"
+        "ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)",
+        "ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)"
     ]
 
     for sql in migrations:
@@ -203,7 +205,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                 with st.container(border=True):
                     if 'items_vd' not in st.session_state:
-                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "Consecutivo", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
+                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
 
                     edited_items_vd = st.data_editor(
                         st.session_state.items_vd,
@@ -348,7 +350,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         new_rows.append(new_row)
                         
                         daily_log_rows.append({
-                            "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": pc_number,
+                            "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": consecutivo_pc, "pc": pc_number,
                             "numero_parte": row["Code (PT)"], "descripcion": row["Description"], "shipper": row["Shipper"],
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
                             "inventory_item_id": item_id, "customer": ""
@@ -365,8 +367,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             ''', new_rows)
                             if daily_log_rows:
                                 cursor.executemany('''
-                                    INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper, inventory_item_id, customer)
-                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s, %(inventory_item_id)s, %(customer)s)
+                                    INSERT INTO daily_logs (factura, fecha, n_bc, pc, numero_parte, descripcion, cantidad, proveedor, status, nombre, shipper, inventory_item_id, customer)
+                                    VALUES (%(factura)s, %(fecha)s, %(n_bc)s, %(pc)s, %(numero_parte)s, %(descripcion)s, %(cantidad)s, %(proveedor)s, %(status)s, %(nombre)s, %(shipper)s, %(inventory_item_id)s, %(customer)s)
                                 ''', daily_log_rows)
                             conn.commit()
                             conn.close()
@@ -406,7 +408,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             vals = (
                                 row.get("No. Factura"),
                                 timestamp.date(),
-                                row.get("Consecutivo"),
+                                row.get("No. BC"),
+                                row.get("PC"),
                                 row.get("No. Parte (PT)"),
                                 row.get("Descripcion"),
                                 row.get("Proveedor"),
@@ -418,9 +421,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                         if entries_to_insert:
                             sql = '''INSERT INTO daily_logs (
-                                        factura, fecha, n_bc, numero_parte, descripcion, proveedor, 
+                                        factura, fecha, n_bc, pc, numero_parte, descripcion, proveedor, 
                                         status, comentarios, nombre
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                             
                             cursor.executemany(sql, entries_to_insert)
                             conn.commit()
@@ -985,7 +988,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         if conn:
             # Consulta filtrada por el rango de fechas seleccionado
             query = """
-                SELECT id, fecha, numero_parte, n_bc, factura, descripcion, cantidad, proveedor, status, shipper, customer, recepcion, remision, comentarios, nombre, timestamp, inventory_item_id 
+                SELECT id, fecha, n_bc, descripcion, cantidad, proveedor, pc, customer, recepcion, remision, comentarios, nombre, numero_parte, factura, status, shipper, timestamp, inventory_item_id 
                 FROM daily_logs 
                 WHERE fecha BETWEEN %s AND %s 
                 ORDER BY fecha DESC, id DESC"""
@@ -997,10 +1000,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "inventory_item_id": None, # Ocultar ID de inventario
                 "timestamp": None, # Ocultar Timestamp
                 "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD", width="small"),
-                "numero_parte": st.column_config.TextColumn("PT", width="medium", help="Número de Parte"),
-                "n_bc": st.column_config.TextColumn("PC", width="small"),
-                "factura": st.column_config.TextColumn("Factura", width="small"),
+                "n_bc": st.column_config.TextColumn("No. BC", width="medium", help="Número Etiqueta Blanca"),
+                "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
+                "pc": st.column_config.TextColumn("PC", width="small", help="Pedido de Compra"),
                 "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
@@ -1008,10 +1011,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     required=False
                 ),
                 "proveedor": st.column_config.TextColumn("Proveedor"),
-                "shipper": st.column_config.TextColumn("Shipper"),
-                "descripcion": st.column_config.TextColumn("Descripción", width="large"),
-                "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 "recepcion": "Recepción",
+                "remision": "Remisión",
+                "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                "nombre": st.column_config.TextColumn("Nombre"),
+                "numero_parte": st.column_config.TextColumn("PT", width="medium"),
+                "factura": st.column_config.TextColumn("Factura Prov.", width="small"),
             }
             
             st.data_editor(
