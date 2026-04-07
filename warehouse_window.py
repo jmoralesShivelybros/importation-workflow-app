@@ -304,7 +304,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         sql = "INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
                                         cursor.executemany(sql, records)
                                         conn.commit()
-                                log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
+                                        log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
                                         st.success(f"✅ Se han importado {len(records)} registros con éxito.")
                                         time.sleep(2)
                                         st.rerun()
