@@ -173,10 +173,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
                 col1, col2 = st.columns(2)
                 with col1:
-                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123")
-                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877")
+                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key="pc_number_in")
+                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key="invoice_pc_in")
                 with col2:
-                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005")
+                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key="consecutivo_pc_in")
                     programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
 
                 with st.container(border=True):
@@ -320,8 +320,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 st.error("Para entradas de PC, completa el PC, Factura y agrega al menos un artículo.")
             else:
                 with st.spinner("Procesando entrada de PC..."):
-                    # ... (Lógica de procesamiento para entradas de PC)
-                    # Esta lógica se mantiene igual que antes
+                    # (Lógica de procesamiento para entradas de PC)
+                 
                     new_rows = []
                     daily_log_rows = []
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -372,6 +372,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             conn.close()
                             st.success(f"✅ Se registraron {len(new_rows)} artículos en inventario.")
                             st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
+                            
+                            # Limpiar campos de texto del formulario usando sus llaves en session_state
+                            st.session_state.pc_number_in = ""
+                            st.session_state.invoice_pc_in = ""
+                            st.session_state.consecutivo_pc_in = ""
+                            
                             time.sleep(1)
                             st.rerun()
 
