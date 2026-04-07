@@ -106,7 +106,7 @@ def init_db():
         "ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'",
         "ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)",
         "ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)",
-        "ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)"
+        "ALTER TABLE daily_logs ADD COLUMN IF NOT EXISTS pc VARCHAR(100)"
     ]
 
     for sql in migrations:
@@ -304,7 +304,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         sql = "INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
                                         cursor.executemany(sql, records)
                                         conn.commit()
-                                        log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
+                                log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
                                         st.success(f"✅ Se han importado {len(records)} registros con éxito.")
                                         time.sleep(2)
                                         st.rerun()
@@ -925,11 +925,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         status_val = row.get("status") or default_status
 
                         sql = '''INSERT INTO daily_logs (
-                            factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, 
+                            factura, fecha, n_bc, pc, numero_parte, descripcion, cantidad, proveedor, 
                             shipper, customer, recepcion, remision, status, comentarios, nombre
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                         vals = (
-                            row.get("factura", ""), fecha_val, row.get("n_bc", ""), row.get("numero_parte", ""),
+                            row.get("factura", ""), fecha_val, row.get("n_bc", ""), row.get("pc", ""), row.get("numero_parte", ""),
                             row.get("descripcion", ""), cantidad_val, row.get("proveedor", ""),
                             row.get("shipper", ""), row.get("customer", ""), row.get("recepcion", ""),
                             row.get("remision", ""), status_val, 
@@ -988,7 +988,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         if conn:
             # Consulta filtrada por el rango de fechas seleccionado
             query = """
-                SELECT id, fecha, n_bc, descripcion, cantidad, proveedor, pc, customer, recepcion, remision, comentarios, nombre, numero_parte, factura, status, shipper, timestamp, inventory_item_id 
+                SELECT `id`, `fecha`, `n_bc`, `descripcion`, `cantidad`, `proveedor`, `pc`, `customer`, `recepcion`, `remision`, `comentarios`, `nombre`, `numero_parte`, `factura`, `status`, `shipper`, `timestamp`, `inventory_item_id` 
                 FROM daily_logs 
                 WHERE fecha BETWEEN %s AND %s 
                 ORDER BY fecha DESC, id DESC"""
