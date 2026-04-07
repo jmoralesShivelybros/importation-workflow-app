@@ -96,24 +96,22 @@ def init_db():
         )
     ''')
     
-    # --- MIGRACIONES (Actualizar tablas existentes si faltan columnas) ---
-    # Intentamos agregar las columnas nuevas. Si fallan es porque ya existen.
-    migrations = [
-        "ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)",
-        "ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)",
-        "ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)",
-        "ALTER TABLE routes MODIFY id INT AUTO_INCREMENT",
-        "ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'",
-        "ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)",
-        "ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)",
-        "ALTER TABLE daily_logs ADD COLUMN IF NOT EXISTS pc VARCHAR(100)"
-    ]
+    # --- MIGRACIONES ROBUSTAS PARA MYSQL ---
+    def column_exists(table, column):
+        cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+        return cursor.fetchone() is not None
 
-    for sql in migrations:
-        try:
-            cursor.execute(sql)
-        except Exception:
-            pass
+    if not column_exists('routes', 'usuario'): cursor.execute("ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)")
+    if not column_exists('inventory', 'usuario_recepcion'): cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
+    if not column_exists('inventory', 'shipper'): cursor.execute("ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)")
+    
+    try: cursor.execute("ALTER TABLE routes MODIFY id INT AUTO_INCREMENT")
+    except: pass
+    
+    if not column_exists('routes', 'estatus'): cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
+    if not column_exists('daily_logs', 'numero_parte'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)")
+    if not column_exists('daily_logs', 'inventory_item_id'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)")
+    if not column_exists('daily_logs', 'pc'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)")
 
     try:
         conn.commit()
