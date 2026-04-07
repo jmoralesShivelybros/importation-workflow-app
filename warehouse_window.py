@@ -984,8 +984,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         conn = get_db_connection()
         if conn:
             # Consulta filtrada por el rango de fechas seleccionado
+            # Orden solicitado: Fecha, No. BC, Descripción, Cantidad, Proveedor, PC, Customer, Recepcion, Remision, Comentarios, Nombre
             query = """
-                SELECT id, fecha, numero_parte, n_bc, factura, descripcion, cantidad, proveedor, status, shipper, customer, recepcion, remision, comentarios, nombre, timestamp, inventory_item_id 
+                SELECT id, fecha, n_bc, descripcion, cantidad, proveedor, factura, customer, recepcion, remision, comentarios, nombre, numero_parte, status, shipper, timestamp, inventory_item_id 
                 FROM daily_logs 
                 WHERE fecha BETWEEN %s AND %s 
                 ORDER BY fecha DESC, id DESC"""
@@ -997,21 +998,23 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "inventory_item_id": None, # Ocultar ID de inventario
                 "timestamp": None, # Ocultar Timestamp
                 "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD", width="small"),
-                "numero_parte": st.column_config.TextColumn("PT", width="medium", help="Número de Parte"),
-                "n_bc": st.column_config.TextColumn("PC", width="small"),
-                "factura": st.column_config.TextColumn("Factura", width="small"),
+                "n_bc": st.column_config.TextColumn("No. BC", width="medium", help="Número asignado (ej: 1123444445)"),
+                "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
-                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
+                "proveedor": st.column_config.TextColumn("Proveedor"),
+                "factura": st.column_config.TextColumn("PC", width="small", help="Número de Pedido de Compra"),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
                     options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
                     required=False
                 ),
-                "proveedor": st.column_config.TextColumn("Proveedor"),
-                "shipper": st.column_config.TextColumn("Shipper"),
-                "descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                "recepcion": st.column_config.TextColumn("Recepción"),
+                "remision": st.column_config.TextColumn("Remisión"),
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
-                "recepcion": "Recepción",
+                "nombre": st.column_config.TextColumn("Nombre"),
+                "numero_parte": st.column_config.TextColumn("PT", width="medium", help="Número de Parte / Código"),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado", "Venta Directa"], required=True),
+                "shipper": st.column_config.TextColumn("Shipper"),
             }
             
             st.data_editor(
