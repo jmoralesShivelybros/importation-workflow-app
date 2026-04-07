@@ -238,6 +238,31 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             
             if auth_pwd == "0612":
                 st.success("Acceso autorizado.")
+
+                # --- BOTÓN PARA VACIAR LA BASE DE DATOS ---
+                with st.expander("🛠️ Zona de Peligro: Mantenimiento de Base de Datos"):
+                    st.warning("Esta acción eliminará TODOS los registros de inventario, bitácora, rutas y logs. Esta acción no se puede deshacer.")
+                    if st.button("🧨 Vaciar TODA la Base de Datos", type="secondary", use_container_width=True):
+                        conn = get_db_connection()
+                        if conn:
+                            cursor = conn.cursor()
+                            try:
+                                # Borramos en orden para evitar problemas de integridad (aunque no hay FK estrictas)
+                                cursor.execute("DELETE FROM route_items")
+                                cursor.execute("DELETE FROM routes")
+                                cursor.execute("DELETE FROM daily_logs")
+                                cursor.execute("DELETE FROM inventory")
+                                cursor.execute("DELETE FROM logs")
+                                conn.commit()
+                                st.success("✅ La base de datos ha sido vaciada completamente.")
+                                time.sleep(2)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al vaciar la base de datos: {e}")
+                            finally:
+                                conn.close()
+                
+                st.divider()
                 st.info("Sube un archivo Excel para cargar registros históricos. Se les asignará automáticamente el estatus **'Entregado'**.")
                 
                 col_imp1, col_imp2 = st.columns(2)
@@ -292,12 +317,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         except (ValueError, TypeError):
                                             clean_qty = 0.0
 
-                                        # Mapeo flexible de columnas incluyendo las variaciones del usuario (CONS, CSSR, RECEP, etc.)
+                                        # Mapeo flexible de columnas incluyendo la nueva columna PC
                                         records.append((
                                             str(get_val(row, ["Factura", "invoice", "No. Factura"])),
                                             clean_date,
-                                            str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo", "PC"])),
-                                            str(get_val(row, ["PT", "PT#", "No. Parte", "Part Number", "numero_parte", "PC"])),
+                                            str(get_val(row, ["N BC", "CONS", "n_bc", "Consecutivo"])),
+                                            str(get_val(row, ["PC", "Pedido de Compra", "P.C."])),
+                                            str(get_val(row, ["PT", "PT#", "No. Parte", "Part Number", "numero_parte"])),
                                             str(get_val(row, ["Descripción", "Descripcion", "description", "DESCRIPCION"])),
                                             clean_qty,
                                             str(get_val(row, ["Proveedor", "proveedor", "Vendor"])),
@@ -311,7 +337,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         ))
 
                                     if records:
-                                        sql = "INSERT INTO daily_logs (factura, fecha, n_bc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                                        sql = "INSERT INTO daily_logs (factura, fecha, n_bc, pc, numero_parte, descripcion, cantidad, proveedor, shipper, customer, recepcion, remision, status, comentarios, nombre) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
                                         cursor.executemany(sql, records)
                                         conn.commit()
                                         log_movement("IMPORT-EXCEL", "IMPORTACION_MASIVA", f"Se importaron {len(records)} registros antiguos.", usuario=import_user)
