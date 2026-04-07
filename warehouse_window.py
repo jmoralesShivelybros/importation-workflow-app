@@ -353,15 +353,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         # Priorizar No. BC de la tabla, si no, usar el general del form
                         bc_final = row["No. BC"] if pd.notna(row["No. BC"]) and str(row["No. BC"]).strip() != "" else consecutivo_pc
 
-                        # El No. BC de la tabla se trata como el PT para la descripción
-                        pt_code = str(row['No. BC']).strip() if pd.notna(row['No. BC']) else ""
                         raw_desc = str(row['Description']).strip() if pd.notna(row['Description']) else ""
-                        full_description = f"{pt_code} {raw_desc}".strip()
+                        bc_val = str(row['No. BC']).strip() if pd.notna(row['No. BC']) else ""
 
                         new_row = {
                             "id": item_id, "pc": pc_number, "proveedor": "", "factura": invoice_number_pc,
-                            "consecutivo": bc_final, "programa": programa_pc, "numero_parte": pt_code,
-                            "descripcion": full_description, "shipper": row["Shipper"], "cantidad": qty,
+                            "consecutivo": bc_final, "programa": programa_pc, "numero_parte": bc_val,
+                            "descripcion": raw_desc, "shipper": row["Shipper"], "cantidad": qty,
                             "precio_unitario": price, "valor_total": qty * price, "estatus": "Recibido",
                             "fecha_entrada": timestamp, "ultima_actualizacion": timestamp, "usuario_recepcion": usuario_recepcion_pc
                         }
@@ -369,12 +367,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         
                         daily_log_rows.append({ 
                             "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": bc_final, "pc": pc_number,
-                            "numero_parte": "", # Vacío para evitar duplicidad (ya va en descripción)
-                            "descripcion": full_description, "shipper": row["Shipper"],
+                            "numero_parte": bc_val, 
+                            "descripcion": raw_desc, "shipper": row["Shipper"],
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
                             "inventory_item_id": item_id, "customer": ""
                         })
-                        log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, BC/PT: {row['No. BC']}", usuario=usuario_recepcion_pc)
+                        log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, No. BC: {bc_val}", usuario=usuario_recepcion_pc)
 
                     if new_rows:
                         conn = get_db_connection()
@@ -423,15 +421,14 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                             pt_val = str(row.get("No. Parte (PT)", "")).strip()
                             desc_val = str(row.get("Descripcion", "")).strip()
-                            full_desc = f"{pt_val} {desc_val}".strip() if pt_val else desc_val
 
                             vals = (
                                 row.get("No. Factura"),
                                 timestamp.date(),
                                 row.get("No. BC"),
                                 row.get("PC"),
-                                "", # numero_parte se guarda vacío porque ya va en la descripción
-                                full_desc,
+                                pt_val,
+                                desc_val,
                                 row.get("Proveedor"),
                                 "Venta Directa",
                                 row.get("Comentarios"),
