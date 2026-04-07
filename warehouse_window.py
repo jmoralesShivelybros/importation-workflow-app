@@ -194,7 +194,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 with st.container(border=True):
                     st.markdown("###### Detalles de los Artículos")
                     if 'items_entry' not in st.session_state:
-                        st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
+                        st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
                     edited_items = st.data_editor(
                         st.session_state.items_entry,
@@ -339,7 +339,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
                     for index, row in edited_items.iterrows():
-                        if not row["Code (PT)"] or not row["Qty"]: continue
+                        if not row["No. BC"] or not row["Qty"]: continue
                         
                         try:
                             qty = float(row["Qty"]) if row["Qty"] else 0.0
@@ -353,8 +353,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         # Priorizar No. BC de la tabla, si no, usar el general del form
                         bc_final = row["No. BC"] if pd.notna(row["No. BC"]) and str(row["No. BC"]).strip() != "" else consecutivo_pc
 
-                        # Concatenar Code (PT) en la descripción para la bitácora
-                        pt_code = str(row['Code (PT)']).strip() if pd.notna(row['Code (PT)']) else ""
+                        # El No. BC de la tabla se trata como el PT para la descripción
+                        pt_code = str(row['No. BC']).strip() if pd.notna(row['No. BC']) else ""
                         raw_desc = str(row['Description']).strip() if pd.notna(row['Description']) else ""
                         full_description = f"{pt_code} {raw_desc}".strip()
 
@@ -374,7 +374,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
                             "inventory_item_id": item_id, "customer": ""
                         })
-                        log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, PT: {row['Code (PT)']}", usuario=usuario_recepcion_pc)
+                        log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, BC/PT: {row['No. BC']}", usuario=usuario_recepcion_pc)
 
                     if new_rows:
                         conn = get_db_connection()
@@ -393,7 +393,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             conn.close()
                             st.success(f"✅ Se registraron {len(new_rows)} artículos en inventario.")
                             # Resetear tabla y aumentar iterador para limpiar campos de texto
-                            st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
+                            st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
                             st.session_state.form_iter += 1
                             
                             time.sleep(1)
