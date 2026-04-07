@@ -102,6 +102,11 @@ def init_db():
         cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
         return cursor.fetchone() is not None
 
+    # --- MIGRACIONES ROBUSTAS PARA MYSQL ---
+    def column_exists(table, column):
+        cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+        return cursor.fetchone() is not None
+
     if not column_exists('routes', 'usuario'): cursor.execute("ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)")
     if not column_exists('inventory', 'usuario_recepcion'): cursor.execute("ALTER TABLE inventory ADD COLUMN usuario_recepcion VARCHAR(100)")
     if not column_exists('inventory', 'shipper'): cursor.execute("ALTER TABLE inventory ADD COLUMN shipper VARCHAR(100)")
@@ -112,14 +117,10 @@ def init_db():
     if not column_exists('routes', 'estatus'): cursor.execute("ALTER TABLE routes ADD COLUMN estatus VARCHAR(50) DEFAULT 'En Tránsito'")
     if not column_exists('daily_logs', 'numero_parte'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN numero_parte VARCHAR(100)")
     if not column_exists('daily_logs', 'inventory_item_id'): cursor.execute("ALTER TABLE daily_logs ADD COLUMN inventory_item_id VARCHAR(50)")
-    
-    # Migración robusta para la columna 'pc' en daily_logs
-    try:
-        cursor.execute("ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)")
-    except mysql.connector.errors.ProgrammingError as e:
-        if "Duplicate column name 'pc'" not in str(e):
-            raise # Re-lanza si es un error diferente
-            
+    if not column_exists('daily_logs', 'pc'): 
+        try: cursor.execute("ALTER TABLE daily_logs ADD COLUMN pc VARCHAR(100)")
+        except: pass
+
     try:
         conn.commit()
     except Exception:
@@ -166,6 +167,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         init_db()
         st.session_state.db_initialized = True
 
+    # Inicializar contador de iteración para resetear formularios
+    if 'form_iter' not in st.session_state:
+        st.session_state.form_iter = 0
+
     # Cargar datos
     df_inventory = load_data()
 
@@ -180,16 +185,16 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
                 col1, col2 = st.columns(2)
                 with col1:
-                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key="pc_number_in")
-                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key="invoice_pc_in")
+                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key=f"pc_in_{st.session_state.form_iter}")
+                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key=f"inv_in_{st.session_state.form_iter}")
                 with col2:
-                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key="consecutivo_pc_in")
+                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key=f"cons_in_{st.session_state.form_iter}")
                     programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
 
                 with st.container(border=True):
                     st.markdown("###### Detalles de los Artículos")
                     if 'items_entry' not in st.session_state:
-                        st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
+                        st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
 
                     edited_items = st.data_editor(
                         st.session_state.items_entry,
@@ -345,21 +350,26 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         
                         item_id = str(uuid.uuid4())[:8]
 
-                        # Concatenar Code (PT) en la descripción
-                        full_description = f"{row['Code (PT)']} {row['Description']}".strip() if row['Code (PT)'] else row['Description']
+                        # Priorizar No. BC de la tabla, si no, usar el general del form
+                        bc_final = row["No. BC"] if pd.notna(row["No. BC"]) and str(row["No. BC"]).strip() != "" else consecutivo_pc
+
+                        # Concatenar Code (PT) en la descripción para la bitácora
+                        pt_code = str(row['Code (PT)']).strip() if pd.notna(row['Code (PT)']) else ""
+                        raw_desc = str(row['Description']).strip() if pd.notna(row['Description']) else ""
+                        full_description = f"{pt_code} {raw_desc}".strip()
 
                         new_row = {
                             "id": item_id, "pc": pc_number, "proveedor": "", "factura": invoice_number_pc,
-                            "consecutivo": consecutivo_pc, "programa": programa_pc, "numero_parte": row["Code (PT)"],
+                            "consecutivo": bc_final, "programa": programa_pc, "numero_parte": pt_code,
                             "descripcion": full_description, "shipper": row["Shipper"], "cantidad": qty,
                             "precio_unitario": price, "valor_total": qty * price, "estatus": "Recibido",
                             "fecha_entrada": timestamp, "ultima_actualizacion": timestamp, "usuario_recepcion": usuario_recepcion_pc
                         }
                         new_rows.append(new_row)
                         
-                        daily_log_rows.append({ # Insertar en daily_logs con PT en la descripción
-                            "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": consecutivo_pc, "pc": pc_number,
-                            "numero_parte": "", # numero_parte se guarda vacío aquí
+                        daily_log_rows.append({ 
+                            "factura": invoice_number_pc, "fecha": timestamp.split(' ')[0], "n_bc": bc_final, "pc": pc_number,
+                            "numero_parte": "", # Vacío para evitar duplicidad (ya va en descripción)
                             "descripcion": full_description, "shipper": row["Shipper"],
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
                             "inventory_item_id": item_id, "customer": ""
@@ -382,12 +392,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             conn.commit()
                             conn.close()
                             st.success(f"✅ Se registraron {len(new_rows)} artículos en inventario.")
+                            # Resetear tabla y aumentar iterador para limpiar campos de texto
                             st.session_state.items_entry = pd.DataFrame(columns=["Code (PT)", "Description", "Shipper", "Qty", "Unit Price"])
-                            
-                            # Limpiar campos de texto del formulario usando sus llaves en session_state
-                            st.session_state.pc_number_in = ""
-                            st.session_state.invoice_pc_in = ""
-                            st.session_state.consecutivo_pc_in = ""
+                            st.session_state.form_iter += 1
                             
                             time.sleep(1)
                             st.rerun()
@@ -1002,7 +1009,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             # Consulta filtrada por el rango de fechas seleccionado
             # Orden solicitado: Fecha, No. BC, Descripción, Cantidad, Proveedor, PC, Customer, Recepcion, Remision, Comentarios, Nombre
             query = """
-                SELECT `id`, `fecha`, `n_bc`, `descripcion`, `cantidad`, `proveedor`, `pc`, `customer`, `recepcion`, `remision`, `comentarios`, `nombre`, `numero_parte`, `factura`, `status`, `shipper`, `timestamp`, `inventory_item_id`
+                SELECT `id`, `fecha`, `n_bc`, `descripcion`, `cantidad`, `proveedor`, `pc`, `customer`, `recepcion`, `remision`, `comentarios`, `nombre`, `numero_parte`, `factura`, `status`, `shipper`, `timestamp`, `inventory_item_id` 
                 FROM daily_logs 
                 WHERE fecha BETWEEN %s AND %s 
                 ORDER BY fecha DESC, id DESC"""
@@ -1014,23 +1021,24 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "inventory_item_id": None, # Ocultar ID de inventario
                 "timestamp": None, # Ocultar Timestamp
                 "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD", width="small"),
-                "n_bc": st.column_config.TextColumn("No. BC", width="medium", help="Número Etiqueta Blanca"),
+                "n_bc": st.column_config.TextColumn("No. BC", width="medium", help="Número de Etiqueta Blanca (Consecutivo)"),
                 "descripcion": st.column_config.TextColumn("Descripción", width="large"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", format="%.2f"),
-                "pc": st.column_config.TextColumn("PC", width="small", help="Pedido de Compra"),
-                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado"], required=True),
+                "proveedor": st.column_config.TextColumn("Proveedor"),
+                "pc": st.column_config.TextColumn("PC", width="small", help="Pedido de Compra (PC)"),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
                     options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
                     required=False
                 ),
-                "proveedor": st.column_config.TextColumn("Proveedor"),
-                "recepcion": "Recepción",
-                "remision": "Remisión",
+                "recepcion": st.column_config.TextColumn("Recepción"),
+                "remision": st.column_config.TextColumn("Remisión"),
                 "comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                 "nombre": st.column_config.TextColumn("Nombre"),
-                "numero_parte": None, # Ocultar la columna PT
-                "factura": st.column_config.TextColumn("Factura Prov.", width="small"),
+                "numero_parte": None, # Ocultar PT (Ya está en descripción)
+                "factura": st.column_config.TextColumn("Factura Prov.", width="small", help="Factura del Proveedor"),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pendiente", "En proceso de entrega", "Revisado", "Entregado", "Cancelado", "Venta Directa"], required=True),
+                "shipper": None,
             }
             
             st.data_editor(
