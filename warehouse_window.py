@@ -197,77 +197,95 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         with tab1:
             # --- FORMULARIO DE ENTRADA A INVENTARIO (PC) ---
-            with st.form("form_recepcion_pc", clear_on_submit=False):
-                st.subheader("Entrada a Inventario (Por PC)")
-                usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
-                col1, col2 = st.columns(2)
-                with col1:
-                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key=f"pc_in_{st.session_state.form_iter}")
-                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key=f"inv_in_{st.session_state.form_iter}")
-                with col2:
-                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key=f"cons_in_{st.session_state.form_iter}")
-                    programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
+            st.subheader("Entrada a Inventario (Por PC)")
+            usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
+            col1, col2 = st.columns(2)
+            with col1:
+                pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key=f"pc_in_{st.session_state.form_iter}")
+                invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key=f"inv_in_{st.session_state.form_iter}")
+            with col2:
+                consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key=f"cons_in_{st.session_state.form_iter}")
+                programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
 
-                with st.container(border=True):
-                    st.markdown("###### Detalles de los Artículos")
-                    if 'items_entry' not in st.session_state:
-                        st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
+            with st.container(border=True):
+                st.markdown("###### Detalles de los Artículos")
+                if 'items_entry' not in st.session_state:
+                    st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                    # Obtener catálogo de descripciones conocidas
-                    bc_catalog = get_known_descriptions()
+                # Obtener catálogo de descripciones conocidas
+                bc_catalog = get_known_descriptions()
 
-                    edited_items = st.data_editor(
-                        st.session_state.items_entry,
-                        num_rows="dynamic",
-                        width="stretch",
-                        key="editor_recepcion"
-                    )
-                    
+                edited_items = st.data_editor(
+                    st.session_state.items_entry,
+                    num_rows="dynamic",
+                    width="stretch",
+                    key="editor_recepcion"
+                )
 
-                    # --- LÓGICA DE AUTOCOMPLETADO ---
-                    # Si el usuario editó la tabla, verificamos si podemos llenar descripciones vacías
-                    if not edited_items.empty:
-                        has_changes = False
-                        for idx, row in edited_items.iterrows():
-                            bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
-                            desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
-                            
-                            # Si tenemos el BC pero no la descripción, y el BC existe en nuestro catálogo
-                            if bc_val and not desc_val and bc_val in bc_catalog:
-                                edited_items.at[idx, "Description"] = bc_catalog[bc_val]
-                                has_changes = True
+                # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
+                if not edited_items.equals(st.session_state.items_entry):
+                    has_changes = False
+                    for idx, row in edited_items.iterrows():
+                        bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
+                        desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
                         
-                        if has_changes:
-                            st.session_state.items_entry = edited_items
-                            st.rerun() # Recargamos para que el usuario vea la descripción en la tabla
-                    # --------------------------------
+                        if bc_val and not desc_val and bc_val in bc_catalog:
+                            edited_items.at[idx, "Description"] = bc_catalog[bc_val]
+                            has_changes = True
+                    
+                    if has_changes:
+                        st.session_state.items_entry = edited_items
+                        st.rerun()
+                    else:
+                        st.session_state.items_entry = edited_items
 
-                    submitted_pc = st.form_submit_button("Registrar Entrada de PC", type="primary", use_container_width=True)
+                submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
         with tab2:
             # --- FORMULARIO DE VENTA DIRECTA / MANUAL ---
-            with st.form("form_venta_directa", clear_on_submit=True):
-                st.subheader("Registro Manual / Venta Directa")
-                st.info("Use este formulario para ventas directas o material que no sigue una ruta de producción. Agregue múltiples registros en la tabla.")
-                
-                vd_nombre = st.selectbox("Nombre (Registra)", options=ALMACENISTAS, key="vd_nombre_multi")
+            st.subheader("Registro Manual / Venta Directa")
+            st.info("Use este formulario para ventas directas o material que no sigue una ruta de producción. Agregue múltiples registros en la tabla.")
+            
+            vd_nombre = st.selectbox("Nombre (Registra)", options=ALMACENISTAS, key="vd_nombre_multi")
 
-                with st.container(border=True):
-                    if 'items_vd' not in st.session_state:
-                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
+            with st.container(border=True):
+                if 'items_vd' not in st.session_state:
+                    st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
 
-                    edited_items_vd = st.data_editor(
-                        st.session_state.items_vd,
-                        num_rows="dynamic",
-                        width="stretch",
-                        column_config={
-                            "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
-                            "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
-                        },
-                        key="editor_vd"
-                    )
-                
-                submitted_vd = st.form_submit_button("Registrar en Bitácora", use_container_width=True)
+                edited_items_vd = st.data_editor(
+                    st.session_state.items_vd,
+                    num_rows="dynamic",
+                    width="stretch",
+                    column_config={
+                        "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                        "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                    },
+                    key="editor_vd"
+                )
+
+                # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
+                if not edited_items_vd.equals(st.session_state.items_vd):
+                    bc_catalog = get_known_descriptions()
+                    has_changes_vd = False
+                    for idx, row in edited_items_vd.iterrows():
+                        bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
+                        pt_val = str(row["No. Parte (PT)"]).strip() if pd.notna(row["No. Parte (PT)"]) else ""
+                        desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
+                        
+                        # Busca por BC o por PT
+                        match_key = bc_val if bc_val in bc_catalog else (pt_val if pt_val in bc_catalog else None)
+                        
+                        if match_key and not desc_val:
+                            edited_items_vd.at[idx, "Descripcion"] = bc_catalog[match_key]
+                            has_changes_vd = True
+                    
+                    if has_changes_vd:
+                        st.session_state.items_vd = edited_items_vd
+                        st.rerun()
+                    else:
+                        st.session_state.items_vd = edited_items_vd
+            
+            submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
         with tab3:
             # --- IMPORTACIÓN MASIVA DESDE EXCEL ---
