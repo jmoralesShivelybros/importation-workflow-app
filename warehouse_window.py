@@ -13,6 +13,19 @@ PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes 
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
 
+def add_sequential_number_column(df):
+    """
+    Añade o actualiza una columna 'No.' con números secuenciales (empezando en 1).
+    Retorna una copia del DataFrame con la columna 'No.' insertada al principio.
+    """
+    df_copy = df.copy() # Siempre trabajar en una copia para evitar SettingWithCopyWarning
+    
+    # Si la columna 'No.' existe, la eliminamos para reinsertarla y asegurar el orden y la numeración.
+    if "No." in df_copy.columns:
+        df_copy = df_copy.drop(columns=["No."])
+    
+    df_copy.insert(0, "No.", range(1, len(df_copy) + 1))
+    return df_copy
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
     conn = get_db_connection()
@@ -212,33 +225,41 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_entry' not in st.session_state:
                     st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
+                # Aplicar la numeración secuencial al DataFrame antes de mostrarlo
+                df_to_display_entry = add_sequential_number_column(st.session_state.items_entry)
+
                 # Obtener catálogo de descripciones conocidas
                 bc_catalog = get_known_descriptions()
 
                 edited_items = st.data_editor(
-                    st.session_state.items_entry,
+                    df_to_display_entry, # Pasar el DataFrame con la columna 'No.'
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
                     key="editor_recepcion"
+                    ,column_config={
+                        "No.": st.column_config.NumberColumn("No.", help="Número de fila", disabled=True),
+                        # Las otras columnas se configurarán por defecto como editables
+                    }
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
-                if not edited_items.equals(st.session_state.items_entry):
+                if not edited_items.equals(df_to_display_entry): # Comparar con el DataFrame que se mostró
+                    # Eliminar la columna 'No.' de edited_items antes de procesar los cambios
+                    edited_items_without_no = edited_items.drop(columns=["No."], errors='ignore')
                     has_changes = False
-                    for idx, row in edited_items.iterrows():
+                    for idx, row in edited_items_without_no.iterrows(): # Iterar sobre el DF sin 'No.'
                         bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
                         desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
                         
                         if bc_val and not desc_val and bc_val in bc_catalog:
-                            edited_items.at[idx, "Description"] = bc_catalog[bc_val]
+                            edited_items_without_no.at[idx, "Description"] = bc_catalog[bc_val]
                             has_changes = True
-                    
                     if has_changes:
-                        st.session_state.items_entry = edited_items
+                        st.session_state.items_entry = edited_items_without_no
                         st.rerun()
                     else:
-                        st.session_state.items_entry = edited_items
+                        st.session_state.items_entry = edited_items_without_no # Actualizar incluso si no hay cambios de autocompletado
 
                 submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
@@ -253,12 +274,16 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_vd' not in st.session_state:
                     st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
 
+                # Aplicar la numeración secuencial al DataFrame antes de mostrarlo
+                df_to_display_vd = add_sequential_number_column(st.session_state.items_vd)
+
                 edited_items_vd = st.data_editor(
-                    st.session_state.items_vd,
+                    df_to_display_vd, # Pasar el DataFrame con la columna 'No.'
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
                     column_config={
+                        "No.": st.column_config.NumberColumn("No.", help="Número de fila", disabled=True),
                         "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
                         "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                     },
@@ -266,26 +291,27 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
-                if not edited_items_vd.equals(st.session_state.items_vd):
+                if not edited_items_vd.equals(df_to_display_vd): # Comparar con el DataFrame que se mostró
+                    # Eliminar la columna 'No.' de edited_items_vd antes de procesar los cambios
+                    edited_items_vd_without_no = edited_items_vd.drop(columns=["No."], errors='ignore')
                     bc_catalog = get_known_descriptions()
                     has_changes_vd = False
-                    for idx, row in edited_items_vd.iterrows():
+                    for idx, row in edited_items_vd_without_no.iterrows(): # Iterar sobre el DF sin 'No.'
                         bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
                         pt_val = str(row["No. Parte (PT)"]).strip() if pd.notna(row["No. Parte (PT)"]) else ""
                         desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
                         
                         # Busca por BC o por PT
                         match_key = bc_val if bc_val in bc_catalog else (pt_val if pt_val in bc_catalog else None)
-                        
                         if match_key and not desc_val:
-                            edited_items_vd.at[idx, "Descripcion"] = bc_catalog[match_key]
+                            edited_items_vd_without_no.at[idx, "Descripcion"] = bc_catalog[match_key]
                             has_changes_vd = True
                     
                     if has_changes_vd:
                         st.session_state.items_vd = edited_items_vd
                         st.rerun()
                     else:
-                        st.session_state.items_vd = edited_items_vd
+                        st.session_state.items_vd = edited_items_vd_without_no # Actualizar incluso si no hay cambios de autocompletado
             
             submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
