@@ -218,6 +218,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 edited_items = st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
+                    hide_index=True,
                     width="stretch",
                     key="editor_recepcion"
                 )
@@ -255,6 +256,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 edited_items_vd = st.data_editor(
                     st.session_state.items_vd,
                     num_rows="dynamic",
+                    hide_index=True,
                     width="stretch",
                     column_config={
                         "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
