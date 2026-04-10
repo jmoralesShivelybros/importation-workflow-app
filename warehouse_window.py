@@ -252,7 +252,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
             with st.container(border=True):
                 if 'items_vd' not in st.session_state:
-                    st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
+                    st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"])
 
                 edited_items_vd = st.data_editor(
                     st.session_state.items_vd,
@@ -490,11 +490,14 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         # Validar que al menos tenga No. BC
                         if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue
                         
+                        # Conversión segura de valores numéricos para evitar NaN en MySQL
                         try:
-                            qty = float(row["Qty"]) if row["Qty"] else 0.0
-                            price = float(row["Unit Price"]) if row["Unit Price"] else 0.0
+                            qty = float(row["Qty"]) if pd.notna(row["Qty"]) else 0.0
                         except (ValueError, TypeError):
                             qty = 0.0
+                        try:
+                            price = float(row["Unit Price"]) if pd.notna(row["Unit Price"]) else 0.0
+                        except (ValueError, TypeError):
                             price = 0.0
                         
                         item_id = str(uuid.uuid4())[:8]
@@ -570,6 +573,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                             pt_val = str(row.get("No. Parte (PT)", "")).strip()
                             desc_val = str(row.get("Descripcion", "")).strip()
+                            
+                            # Manejo seguro de cantidad en Registro Manual
+                            try:
+                                qty_vd = float(row.get("Qty")) if pd.notna(row.get("Qty")) else 0.0
+                            except (ValueError, TypeError):
+                                qty_vd = 0.0
 
                             vals = (
                                 row.get("No. Factura"),
@@ -578,18 +587,20 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                 row.get("PC"),
                                 pt_val,
                                 desc_val,
+                                qty_vd,
                                 row.get("Proveedor"),
                                 "Venta Directa",
+                                "Ventas Directas", # Customer por defecto para este flujo
                                 row.get("Comentarios"),
                                 vd_nombre # The name from the selectbox
                             )
                             entries_to_insert.append(vals)
 
                         if entries_to_insert:
-                            sql = '''INSERT INTO daily_logs ( # Insertar en daily_logs con PT en la descripción
-                                        factura, fecha, n_bc, pc, numero_parte, descripcion, proveedor, 
-                                        status, comentarios, nombre
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                            sql = '''INSERT INTO daily_logs (
+                                        factura, fecha, n_bc, pc, numero_parte, descripcion, cantidad, proveedor, 
+                                        status, customer, comentarios, nombre
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                             
                             cursor.executemany(sql, entries_to_insert)
                             conn.commit()
