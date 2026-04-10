@@ -158,7 +158,8 @@ def get_known_descriptions():
         cursor.execute("SELECT DISTINCT numero_parte, descripcion FROM inventory WHERE numero_parte IS NOT NULL AND numero_parte != ''")
         for (np, desc) in cursor.fetchall():
             if np and desc:
-                mapping[str(np).strip()] = str(desc).strip()
+                # Guardamos las llaves en MAYÚSCULAS para búsqueda insensible a caja
+                mapping[str(np).strip().upper()] = str(desc).strip()
     finally:
         conn.close()
     return mapping
@@ -212,23 +213,22 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_entry' not in st.session_state:
                     st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                # Obtener catálogo de descripciones conocidas
-                bc_catalog = get_known_descriptions()
-
                 edited_items = st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
-                    key="editor_recepcion"
+                    key="editor_recepcion_bc"
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
                 if not edited_items.equals(st.session_state.items_entry):
                     new_items = edited_items.copy()
+                    bc_catalog = get_known_descriptions()
                     has_changes = False
                     for idx, row in new_items.iterrows():
-                        bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
+                        # Búsqueda normalizada en mayúsculas
+                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
                         desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
                         
                         if bc_val and not desc_val and bc_val in bc_catalog:
@@ -271,15 +271,21 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     bc_catalog = get_known_descriptions()
                     has_changes_vd = False
                     for idx, row in new_items_vd.iterrows():
-                        bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
-                        pt_val = str(row["No. Parte (PT)"]).strip() if pd.notna(row["No. Parte (PT)"]) else ""
+                        # Normalizar entradas a mayúsculas para la comparación
+                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
+                        pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
                         desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
-                        # Busca por BC o por PT
-                        match_key = bc_val if bc_val in bc_catalog else (pt_val if pt_val in bc_catalog else None)
+                        
+                        # Intentar coincidencia con BC o con PT (insensible a mayúsculas)
+                        match_key = None
+                        if bc_val in bc_catalog: match_key = bc_val
+                        elif pt_val in bc_catalog: match_key = pt_val
+
                         if match_key and not desc_val:
                             new_items_vd.at[idx, "Descripcion"] = bc_catalog[match_key]
                             has_changes_vd = True
-                    # Reset index para evitar la aparición de columnas de índice sin nombre
+                    
+                    # Guardar con index reseteado para prevenir la columna extra sin nombre
                     st.session_state.items_vd = new_items_vd.reset_index(drop=True)
                     if has_changes_vd:
                         st.rerun()
