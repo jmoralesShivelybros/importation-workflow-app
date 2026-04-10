@@ -29,13 +29,10 @@ def main():
     st.set_page_config(layout="wide", page_title="Sistema de Logística")
     st.title("📦 Sistema de Logística Web")
 
-    # --- Lógica para despliegue en la nube ---
-    # Usamos un directorio temporal para actuar como la carpeta "Logistica"
-    # Este directorio se crea por sesión de usuario.
-    if 'temp_dir' not in st.session_state:
-        st.session_state.temp_dir = tempfile.mkdtemp()
-    
-    logistica_root_path = st.session_state.temp_dir
+    # Usamos la ruta base del proyecto para que las carpetas sean relativas.
+    # Esto evita el uso de carpetas /tmp aleatorias y mantiene la estructura local.
+    # Nota: Streamlit Cloud borra los archivos locales al reiniciar la aplicación.
+    logistica_root_path = os.path.dirname(os.path.abspath(__file__))
     folder_manager = FolderManager(logistica_root_path)    
     
     # --- Barra lateral para navegación ---

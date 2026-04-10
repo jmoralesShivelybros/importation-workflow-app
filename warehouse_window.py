@@ -380,7 +380,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     if backups:
                         with st.expander("📂 Ver y Descargar Respaldos Anteriores", expanded=False):
                             for b_file in backups:
-                                b_path = os.path.join(BACKUP_DIR, b_file)
                                 b_path = os.path.join(backup_dir, b_file)
                                 file_stats = os.stat(b_path)
                                 size_mb = file_stats.st_size / (1024 * 1024)
