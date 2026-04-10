@@ -9,7 +9,8 @@ import numpy as np
 import mysql.connector
 
 # --- Constantes ---
-PROGRAMAS = ["Genv Diego", "Edu prismaticos Dianei", "CSS Erika", "Edu engranes Mayela", "Ventas Directas","Otro"]
+
+PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA", "Ventas Directas", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
 
@@ -486,7 +487,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
                     for index, row in edited_items.iterrows():
-                        if not row["No. BC"] or not row["Qty"]: continue
+                        # Validar que al menos tenga No. BC
+                        if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue
                         
                         try:
                             qty = float(row["Qty"]) if row["Qty"] else 0.0
@@ -517,7 +519,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             "numero_parte": bc_val, 
                             "descripcion": raw_desc, "shipper": row["Shipper"],
                             "cantidad": qty, "proveedor": "", "status": "Pendiente", "nombre": usuario_recepcion_pc,
-                            "inventory_item_id": item_id, "customer": ""
+                            "inventory_item_id": item_id, "customer": programa_pc
                         })
                         log_movement(new_row["id"], "ENTRADA", f"Recepción PC: {pc_number}, No. BC: {bc_val}", usuario=usuario_recepcion_pc)
 
@@ -1172,7 +1174,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 "pc": st.column_config.TextColumn("PC", width="small", help="Pedido de Compra (PC)"),
                 "customer": st.column_config.SelectboxColumn(
                     "Customer",
-                    options=["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA"],
+                    options=PROGRAMAS,
                     required=False
                 ),
                 "recepcion": st.column_config.TextColumn("Recepción"),
