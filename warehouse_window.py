@@ -146,6 +146,23 @@ def load_data():
         conn.close()
     return df
 
+def get_known_descriptions():
+    """Obtiene un diccionario de mapeo {numero_parte/BC: descripcion} desde el inventario existente."""
+    conn = get_db_connection()
+    mapping = {}
+    if not conn:
+        return mapping
+    try:
+        cursor = conn.cursor()
+        # Buscamos combinaciones únicas de número de parte y descripción
+        cursor.execute("SELECT DISTINCT numero_parte, descripcion FROM inventory WHERE numero_parte IS NOT NULL AND numero_parte != ''")
+        for (np, desc) in cursor.fetchall():
+            if np and desc:
+                mapping[str(np).strip()] = str(desc).strip()
+    finally:
+        conn.close()
+    return mapping
+
 def log_movement(item_id, accion, detalle, usuario="Almacenista"):
     """Registra un movimiento en la tabla de logs."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -180,55 +197,94 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         with tab1:
             # --- FORMULARIO DE ENTRADA A INVENTARIO (PC) ---
-            with st.form("form_recepcion_pc", clear_on_submit=False):
-                st.subheader("Entrada a Inventario (Por PC)")
-                usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
-                col1, col2 = st.columns(2)
-                with col1:
-                    pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key=f"pc_in_{st.session_state.form_iter}")
-                    invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key=f"inv_in_{st.session_state.form_iter}")
-                with col2:
-                    consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key=f"cons_in_{st.session_state.form_iter}")
-                    programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
+            st.subheader("Entrada a Inventario (Por PC)")
+            usuario_recepcion_pc = st.selectbox("Recibido por:", options=ALMACENISTAS, key="user_recepcion_pc")
+            col1, col2 = st.columns(2)
+            with col1:
+                pc_number = st.text_input("Número de PC (Pedido de Compra):", placeholder="Ej: PC123", key=f"pc_in_{st.session_state.form_iter}")
+                invoice_number_pc = st.text_input("Factura del Proveedor:", placeholder="Ej: F-998877", key=f"inv_in_{st.session_state.form_iter}")
+            with col2:
+                consecutivo_pc = st.text_input("Número Consecutivo (Etiqueta Blanca):", placeholder="Ej: 20005", key=f"cons_in_{st.session_state.form_iter}")
+                programa_pc = st.selectbox("Programa / Destino:", options=[p for p in PROGRAMAS if p != "Ventas Directas"], key="programa_pc")
 
-                with st.container(border=True):
-                    st.markdown("###### Detalles de los Artículos")
-                    if 'items_entry' not in st.session_state:
-                        st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
+            with st.container(border=True):
+                st.markdown("###### Detalles de los Artículos")
+                if 'items_entry' not in st.session_state:
+                    st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                    edited_items = st.data_editor(
-                        st.session_state.items_entry,
-                        num_rows="dynamic",
-                        width="stretch",
-                        key="editor_recepcion"
-                    )
+                # Obtener catálogo de descripciones conocidas
+                bc_catalog = get_known_descriptions()
+
+                edited_items = st.data_editor(
+                    st.session_state.items_entry,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    width="stretch",
+                    key="editor_recepcion"
+                )
+
+                # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
+                if not edited_items.equals(st.session_state.items_entry):
+                    new_items = edited_items.copy()
+                    has_changes = False
+                    for idx, row in new_items.iterrows():
+                        bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
+                        desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
+                        
+                        if bc_val and not desc_val and bc_val in bc_catalog:
+                            new_items.at[idx, "Description"] = bc_catalog[bc_val]
+                            has_changes = True
                     
-                    submitted_pc = st.form_submit_button("Registrar Entrada de PC", type="primary", use_container_width=True)
+                    # Guardar siempre con el index reseteado para evitar la columna sin nombre
+                    st.session_state.items_entry = new_items.reset_index(drop=True)
+                    if has_changes:
+                        st.rerun()
+
+                submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
         with tab2:
             # --- FORMULARIO DE VENTA DIRECTA / MANUAL ---
-            with st.form("form_venta_directa", clear_on_submit=True):
-                st.subheader("Registro Manual / Venta Directa")
-                st.info("Use este formulario para ventas directas o material que no sigue una ruta de producción. Agregue múltiples registros en la tabla.")
-                
-                vd_nombre = st.selectbox("Nombre (Registra)", options=ALMACENISTAS, key="vd_nombre_multi")
+            st.subheader("Registro Manual / Venta Directa")
+            st.info("Use este formulario para ventas directas o material que no sigue una ruta de producción. Agregue múltiples registros en la tabla.")
+            
+            vd_nombre = st.selectbox("Nombre (Registra)", options=ALMACENISTAS, key="vd_nombre_multi")
 
-                with st.container(border=True):
-                    if 'items_vd' not in st.session_state:
-                        st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
+            with st.container(border=True):
+                if 'items_vd' not in st.session_state:
+                    st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
 
-                    edited_items_vd = st.data_editor(
-                        st.session_state.items_vd,
-                        num_rows="dynamic",
-                        width="stretch",
-                        column_config={
-                            "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
-                            "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
-                        },
-                        key="editor_vd"
-                    )
-                
-                submitted_vd = st.form_submit_button("Registrar en Bitácora", use_container_width=True)
+                edited_items_vd = st.data_editor(
+                    st.session_state.items_vd,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                        "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
+                    },
+                    key="editor_vd"
+                )
+
+                # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
+                if not edited_items_vd.equals(st.session_state.items_vd):
+                    new_items_vd = edited_items_vd.copy()
+                    bc_catalog = get_known_descriptions()
+                    has_changes_vd = False
+                    for idx, row in new_items_vd.iterrows():
+                        bc_val = str(row["No. BC"]).strip() if pd.notna(row["No. BC"]) else ""
+                        pt_val = str(row["No. Parte (PT)"]).strip() if pd.notna(row["No. Parte (PT)"]) else ""
+                        desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
+                        # Busca por BC o por PT
+                        match_key = bc_val if bc_val in bc_catalog else (pt_val if pt_val in bc_catalog else None)
+                        if match_key and not desc_val:
+                            new_items_vd.at[idx, "Descripcion"] = bc_catalog[match_key]
+                            has_changes_vd = True
+                    # Reset index para evitar la aparición de columnas de índice sin nombre
+                    st.session_state.items_vd = new_items_vd.reset_index(drop=True)
+                    if has_changes_vd:
+                        st.rerun()
+            
+            submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
         with tab3:
             # --- IMPORTACIÓN MASIVA DESDE EXCEL ---
@@ -272,6 +328,65 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 with col_imp2:
                     # Permitir elegir el estatus inicial para pruebas
                     import_status = st.selectbox("Estatus inicial para estos registros:", options=ESTATUS_OPCIONES + ["Entregado"], index=5, key="import_status_choice")
+                
+                st.divider()
+                with st.expander("📖 Cargar Catálogo Maestro (BC + Descripción)"):
+                    st.info("Utilice esta herramienta para cargar masivamente las descripciones asociadas a los números de BC. El Excel debe tener al menos las columnas: **'No. BC'** y **'Description'**.")
+                    catalog_file = st.file_uploader("Subir archivo de Catálogo", type=["xlsx"], key="catalog_uploader")
+                    
+                    if catalog_file:
+                        df_cat = pd.read_excel(catalog_file)
+                        st.dataframe(df_cat.head(), use_container_width=True)
+                        
+                        if st.button("📥 Importar Catálogo", type="primary"):
+                            conn = get_db_connection()
+                            if conn:
+                                cursor = conn.cursor()
+                                try:
+                                    # Mapeo flexible de nombres de columna
+                                    def find_col(df, options):
+                                        for opt in options:
+                                            matches = [c for c in df.columns if opt.lower() in c.lower()]
+                                            if matches: return matches[0]
+                                        return None
+
+                                    col_bc = find_col(df_cat, ["BC", "parte", "numero", "codigo"])
+                                    col_desc = find_col(df_cat, ["desc", "item", "nombre"])
+
+                                    if not col_bc or not col_desc:
+                                        st.error(f"No se encontraron columnas de BC o Descripción. Columnas detectadas: {list(df_cat.columns)}")
+                                    else:
+                                        catalog_records = []
+                                        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                        
+                                        for _, row in df_cat.iterrows():
+                                            bc_val = str(row[col_bc]).strip()
+                                            desc_val = str(row[col_desc]).strip()
+                                            
+                                            if bc_val and desc_val and bc_val != "nan" and desc_val != "nan":
+                                                catalog_records.append((
+                                                    str(uuid.uuid4())[:8], # id
+                                                    bc_val,                # numero_parte
+                                                    desc_val,              # descripcion
+                                                    "CATALOGO",            # estatus
+                                                    ts,                    # fecha_entrada
+                                                    import_user            # usuario_recepcion
+                                                ))
+                                        
+                                        if catalog_records:
+                                            sql = "INSERT INTO inventory (id, numero_parte, descripcion, estatus, fecha_entrada, usuario_recepcion) VALUES (%s, %s, %s, %s, %s, %s)"
+                                            cursor.executemany(sql, catalog_records)
+                                            conn.commit()
+                                            st.success(f"✅ Se han cargado {len(catalog_records)} descripciones al catálogo.")
+                                            time.sleep(1.5)
+                                            st.rerun()
+                                        else:
+                                            st.warning("No se encontraron registros válidos para importar.")
+                                except Exception as e:
+                                    st.error(f"Error al importar catálogo: {e}")
+                                finally:
+                                    conn.close()
+
                     st.caption("Nota: 'Entregado' marcará los registros como cerrados históricamente.")
                 
                 if uploaded_file:
@@ -416,8 +531,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             conn.commit()
                             conn.close()
                             st.success(f"✅ Se registraron {len(new_rows)} artículos en inventario.")
-                            # Resetear tabla y aumentar iterador para limpiar campos de texto
-                            st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
+                            # Resetear tabla y aumentar iterador para limpiar campos de texto (sin la columna 'No.')
+                            st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"]) 
                             st.session_state.form_iter += 1
                             
                             time.sleep(1)
@@ -475,7 +590,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             log_movement(f"BIT-BATCH", "REGISTRO_MANUAL_MASIVO", log_detail, usuario=vd_nombre)
                             
                             st.success(f"✅ {len(entries_to_insert)} registros guardados en la bitácora correctamente.")
-                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"])
+                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"]) 
                             time.sleep(1.5)
                             st.rerun()
                         else:
