@@ -1046,22 +1046,17 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         with st.container(border=True):
             col_f1, col_f2 = st.columns([2, 1])
             with col_f1:
-                # --- CÁLCULO AUTOMÁTICO: Mes actual y mes pasado ---
+                # --- CÁLCULO AUTOMÁTICO: Solo mes actual ---
                 hoy = datetime.now()
                 # Primer día del mes actual
                 primer_dia_mes_actual = hoy.replace(day=1)
-                # Último día del mes pasado
-                ultimo_dia_mes_pasado = primer_dia_mes_actual - timedelta(days=1)
-                # Primer día del mes pasado
-                primer_dia_mes_pasado = ultimo_dia_mes_pasado.replace(day=1)
-
                 date_range = st.date_input(
                     "Filtrar por rango de fechas:",
-                    value=(primer_dia_mes_pasado.date(), hoy.date()),
+                    value=(primer_dia_mes_actual.date(), hoy.date()),
                     key="bitacora_date_range"
                 )
             with col_f2:
-                st.info("📅")
+                st.info("📅 Filtro de Fechas")
 
         # Validar el rango de fechas para la consulta SQL
         if isinstance(date_range, tuple) and len(date_range) == 2:
