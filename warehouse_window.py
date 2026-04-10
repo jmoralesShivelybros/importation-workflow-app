@@ -44,18 +44,34 @@ def run_backup(backup_dir, is_manual=False):
         return False, "Error de conexión a la base de datos."
     
     try:
-        tables = ['inventory', 'daily_logs', 'logs', 'routes', 'route_items']
+        # Configuración de exportación con nombres legibles y orden de tablas
+        backup_config = {
+            'daily_logs': 'Historial_Completo_Recepciones',
+            'inventory': 'Estado_Actual_Inventario',
+            'routes': 'Registro_de_Rutas',
+            'route_items': 'Detalle_Items_por_Ruta',
+            'logs': 'Logs_de_Sistema'
+        }
+
         with pd.ExcelWriter(path, engine='openpyxl') as writer:
-            for table in tables:
+            for table_name, sheet_name in backup_config.items():
                 try:
-                    df = pd.read_sql(f"SELECT * FROM {table}", conn)
+                    # Extraemos todo el historial sin filtros de fecha para el respaldo
+                    df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+                    
+                    # Reordenar columnas para "darle lógica" si es la tabla de historial
+                    if table_name == 'daily_logs' and not df.empty:
+                        cols_priority = ['id', 'fecha', 'n_bc', 'pc', 'factura', 'numero_parte', 'descripcion', 'cantidad', 'proveedor', 'shipper', 'customer', 'status', 'nombre', 'comentarios']
+                        existing_cols = [c for c in cols_priority if c in df.columns]
+                        other_cols = [c for c in df.columns if c not in existing_cols]
+                        df = df[existing_cols + other_cols]
+
                     # Limpiar caracteres ilegales para Excel si es necesario
                     for col in df.select_dtypes(include=['object']).columns:
                         df[col] = df[col].fillna('').astype(str).apply(clean_string)
-                    df.to_excel(writer, sheet_name=table, index=False)
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
                 except Exception as e:
-                    # Si una tabla no existe o falla, crear una hoja con el error
-                    pd.DataFrame({"error": [str(e)]}).to_excel(writer, sheet_name=f"ERROR_{table}")
+                    pd.DataFrame({"error": [str(e)]}).to_excel(writer, sheet_name=f"ERROR_{table_name}")
         return True, filename
     except Exception as e:
         return False, str(e)
