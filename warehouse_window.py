@@ -15,9 +15,7 @@ PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
 
-BACKUP_DIR = "/workspaces/importation-workflow-app/almacen/respaldo_mensual_almacen"
-
-def run_backup(is_manual=False):
+def run_backup(backup_dir, is_manual=False):
     """Genera un archivo Excel con todas las tablas de la base de datos como respaldo."""
     # Expresión regular para caracteres ilegales en XML/Excel
     illegal_xml_chars_re = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
@@ -26,8 +24,8 @@ def run_backup(is_manual=False):
         if not isinstance(val, str): return val
         return illegal_xml_chars_re.sub('', val)
 
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR, exist_ok=True)
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir, exist_ok=True)
     
     now = datetime.now()
     if is_manual:
@@ -35,7 +33,7 @@ def run_backup(is_manual=False):
     else:
         filename = f"Respaldo_Mensual_{now.strftime('%Y_%m')}.xlsx"
     
-    path = os.path.join(BACKUP_DIR, filename)
+    path = os.path.join(backup_dir, filename)
     
     # Evitar sobrescribir el respaldo mensual automático si ya se hizo hoy
     if not is_manual and os.path.exists(path):
@@ -64,10 +62,10 @@ def run_backup(is_manual=False):
     finally:
         conn.close()
 
-def check_auto_backup():
+def check_auto_backup(backup_dir):
     """Verifica y ejecuta el respaldo mensual automático si no existe."""
     if 'auto_backup_done' not in st.session_state:
-        success, msg = run_backup(is_manual=False)
+        success, msg = run_backup(backup_dir, is_manual=False)
         if success:
             st.toast(f"📦 Respaldo mensual generado: {msg}", icon="💾")
         st.session_state.auto_backup_done = True
@@ -242,8 +240,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     if 'form_iter' not in st.session_state:
         st.session_state.form_iter = 0
 
+    # Definir la ruta de respaldos dinámicamente usando el folder_manager
+    backup_dir = os.path.join(folder_manager.almacen_base_path, "respaldo_mensual_almacen")
+
     # Ejecutar verificación de respaldo mensual automático
-    check_auto_backup()
+    check_auto_backup(backup_dir)
 
     # Cargar datos
     df_inventory = load_data()
@@ -364,18 +365,18 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 col_res1, col_res2 = st.columns([1, 1])
                 with col_res1:
                     if st.button("🚀 Generar Respaldo Manual Ahora", type="primary", use_container_width=True):
-                        success, res = run_backup(is_manual=True)
+                        success, res = run_backup(backup_dir, is_manual=True)
                         if success:
                             st.success(f"Respaldo creado: {res}")
                         else:
                             st.error(f"Error: {res}")
                 
                 with col_res2:
-                    st.info(f"Ruta: `{BACKUP_DIR}`")
+                    st.info(f"Ruta: `{backup_dir}`")
 
                 # Listar respaldos existentes
-                if os.path.exists(BACKUP_DIR):
-                    backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith('.xlsx')], reverse=True)
+                if os.path.exists(backup_dir):
+                    backups = sorted([f for f in os.listdir(backup_dir) if f.endswith('.xlsx')], reverse=True)
                     if backups:
                         with st.expander("📂 Ver y Descargar Respaldos Anteriores", expanded=False):
                             for b_file in backups:
