@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 from datetime import datetime, timedelta
 import time
 import uuid
@@ -13,6 +14,63 @@ import mysql.connector
 PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA", "Ventas Directas", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
+
+BACKUP_DIR = "/workspaces/importation-workflow-app/almacen/respaldo_mensual_almacen"
+
+def run_backup(is_manual=False):
+    """Genera un archivo Excel con todas las tablas de la base de datos como respaldo."""
+    # Expresión regular para caracteres ilegales en XML/Excel
+    illegal_xml_chars_re = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+    
+    def clean_string(val):
+        if not isinstance(val, str): return val
+        return illegal_xml_chars_re.sub('', val)
+
+    if not os.path.exists(BACKUP_DIR):
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+    
+    now = datetime.now()
+    if is_manual:
+        filename = f"Respaldo_Manual_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+    else:
+        filename = f"Respaldo_Mensual_{now.strftime('%Y_%m')}.xlsx"
+    
+    path = os.path.join(BACKUP_DIR, filename)
+    
+    # Evitar sobrescribir el respaldo mensual automático si ya se hizo hoy
+    if not is_manual and os.path.exists(path):
+        return False, "El respaldo mensual ya existe."
+
+    conn = get_db_connection()
+    if not conn:
+        return False, "Error de conexión a la base de datos."
+    
+    try:
+        tables = ['inventory', 'daily_logs', 'logs', 'routes', 'route_items']
+        with pd.ExcelWriter(path, engine='openpyxl') as writer:
+            for table in tables:
+                try:
+                    df = pd.read_sql(f"SELECT * FROM {table}", conn)
+                    # Limpiar caracteres ilegales para Excel si es necesario
+                    for col in df.select_dtypes(include=['object']).columns:
+                        df[col] = df[col].fillna('').astype(str).apply(clean_string)
+                    df.to_excel(writer, sheet_name=table, index=False)
+                except Exception as e:
+                    # Si una tabla no existe o falla, crear una hoja con el error
+                    pd.DataFrame({"error": [str(e)]}).to_excel(writer, sheet_name=f"ERROR_{table}")
+        return True, filename
+    except Exception as e:
+        return False, str(e)
+    finally:
+        conn.close()
+
+def check_auto_backup():
+    """Verifica y ejecuta el respaldo mensual automático si no existe."""
+    if 'auto_backup_done' not in st.session_state:
+        success, msg = run_backup(is_manual=False)
+        if success:
+            st.toast(f"📦 Respaldo mensual generado: {msg}", icon="💾")
+        st.session_state.auto_backup_done = True
 
 def init_db():
     """Inicializa la base de datos y las tablas si no existen."""
@@ -98,14 +156,8 @@ def init_db():
         )
     ''')
     
-    # --- MIGRACIONES ROBUSTAS PARA MYSQL ---
-    def column_exists(table, column):
-        cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
-        return cursor.fetchone() is not None
-
-    # --- MIGRACIONES ROBUSTAS PARA MYSQL ---
-    def column_exists(table, column):
-        cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+    def column_exists(table, column_name):
+        cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column_name}'")
         return cursor.fetchone() is not None
 
     if not column_exists('routes', 'usuario'): cursor.execute("ALTER TABLE routes ADD COLUMN usuario VARCHAR(100)")
@@ -189,6 +241,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     # Inicializar contador de iteración para resetear formularios
     if 'form_iter' not in st.session_state:
         st.session_state.form_iter = 0
+
+    # Ejecutar verificación de respaldo mensual automático
+    check_auto_backup()
 
     # Cargar datos
     df_inventory = load_data()
@@ -302,10 +357,58 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             if auth_pwd == "0612":
                 st.success("Acceso autorizado.")
 
+                # --- SECCIÓN DE RESPALDOS ---
+                st.divider()
+                st.subheader("💾 Gestión de Respaldos de Base de Datos")
+                
+                col_res1, col_res2 = st.columns([1, 1])
+                with col_res1:
+                    if st.button("🚀 Generar Respaldo Manual Ahora", type="primary", use_container_width=True):
+                        success, res = run_backup(is_manual=True)
+                        if success:
+                            st.success(f"Respaldo creado: {res}")
+                        else:
+                            st.error(f"Error: {res}")
+                
+                with col_res2:
+                    st.info(f"Ruta: `{BACKUP_DIR}`")
+
+                # Listar respaldos existentes
+                if os.path.exists(BACKUP_DIR):
+                    backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith('.xlsx')], reverse=True)
+                    if backups:
+                        with st.expander("📂 Ver y Descargar Respaldos Anteriores", expanded=False):
+                            for b_file in backups:
+                                b_path = os.path.join(BACKUP_DIR, b_file)
+                                file_stats = os.stat(b_path)
+                                size_mb = file_stats.st_size / (1024 * 1024)
+                                date_mod = datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d %H:%M')
+                                
+                                c_f1, c_f2, c_f3 = st.columns([3, 1, 1])
+                                with c_f1:
+                                    st.write(f"📄 **{b_file}**")
+                                    st.caption(f"Fecha: {date_mod} | Tamaño: {size_mb:.2f} MB")
+                                with c_f2:
+                                    with open(b_path, "rb") as f:
+                                        st.download_button(
+                                            label="📥 Descargar",
+                                            data=f.read(),
+                                            file_name=b_file,
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            key=f"dl_{b_file}"
+                                        )
+                                with c_f3:
+                                    if st.button("🗑️", key=f"del_{b_file}", help="Eliminar respaldo"):
+                                        os.remove(b_path)
+                                        st.rerun()
+                    else:
+                        st.info("No se han generado respaldos aún.")
+
                 # --- BOTÓN PARA VACIAR LA BASE DE DATOS ---
+                st.divider()
                 with st.expander("🛠️ Zona de Peligro: Mantenimiento de Base de Datos"):
                     st.warning("Esta acción eliminará TODOS los registros de inventario, bitácora, rutas y logs. Esta acción no se puede deshacer.")
-                    if st.button("🧨 Vaciar TODA la Base de Datos", type="secondary", use_container_width=True):
+                    if st.button("🧨 Vaciar TODA la Base de Datos", type="secondary", use_container_width=True, key="btn_vaciar_db"):
                         conn = get_db_connection()
                         if conn:
                             cursor = conn.cursor()
