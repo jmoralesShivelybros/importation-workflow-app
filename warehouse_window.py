@@ -371,12 +371,19 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             
             auth_pwd = st.text_input("🔑 Ingrese la contraseña de autorización:", type="password", key="auth_import_pwd")
             
-            if auth_pwd == "0612":
+        
+            try:
+                admin_password = st.secrets["WAREHOUSE_PASSWORD"]
+            except (KeyError, FileNotFoundError):
+                admin_password = "0612"
+
+            if auth_pwd == admin_password:
                 st.success("Acceso autorizado.")
 
                 # --- SECCIÓN DE RESPALDOS ---
                 st.divider()
                 st.subheader("💾 Gestión de Respaldos de Base de Datos")
+                st.subheader("o")
                 
                 col_res1, col_res2 = st.columns([1, 1])
                 with col_res1:
