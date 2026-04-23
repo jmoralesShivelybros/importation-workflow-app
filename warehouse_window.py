@@ -1164,7 +1164,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
     # --- SECCIÓN: HISTORIAL ---
     elif section == "Historial":
-        st.header("📚 Historial y Bitácora")
+       
 
         st.subheader("📋 Bitácora Diaria (General)")
         st.caption("📝 Edita directamente en la tabla. Agrega filas al final. Los cambios se guardan automáticamente.")
