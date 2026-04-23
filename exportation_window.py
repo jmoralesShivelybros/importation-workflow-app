@@ -437,7 +437,7 @@ def generate_final_pdf(folder_manager, week_num, files, extracted_data, selected
                     "ship_to": "SuperAbrasives, Inc. (248) 348-7670\nSarah Foster\n28047 Grand Oaks Ct.\nWixom, MI 48393-3340"
                 },
                 "Certificado Saint Gobain.pdf": {
-                    "ship_to": "SAINT-GOBAIN ABRASIVES, INC\nONE NEW BOND STREET \nWORCESTER, MA 01615-0008\nUSA"
+                    "ship_to": "SAINT-GOBAIN ABRASIVES, INC\n200 E FULLERTON \nCAROL STREAM IL 60188\nUSA"
                 },
                 "TOOLINK - USMCA-2025-CERTIFICATE OF ORIGIN.pdf": {
                     "ship_to": "TOOLINK ENGINEERING INC, Todd Rued (720) 442-6610\n4699 Nautilus Court South #206\nBoulder, CO. 80301\nUSA"
