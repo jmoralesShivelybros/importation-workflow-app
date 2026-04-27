@@ -308,18 +308,19 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
-                bc_catalog = get_known_descriptions()
-                has_changes = False
-                for idx, row in st.session_state.items_entry.iterrows():
-                    bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
-                    desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
-                    
-                    if bc_val and not desc_val and bc_val in bc_catalog:
-                        st.session_state.items_entry.at[idx, "Description"] = bc_catalog[bc_val]
-                        has_changes = True
-                
-                if has_changes:
-                    st.rerun()
+                if not st.session_state.items_entry.empty:
+                    bc_catalog = get_known_descriptions()
+                    has_changes = False
+                    for idx, row in st.session_state.items_entry.iterrows():
+                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
+                        desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
+                        
+                        if bc_val and not desc_val and bc_val in bc_catalog:
+                            st.session_state.items_entry.at[idx, "Description"] = bc_catalog[bc_val]
+                            has_changes = True
+
+                    if has_changes:
+                        st.rerun()
 
                 submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
@@ -347,23 +348,24 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
-                bc_catalog_vd = get_known_descriptions()
-                has_changes_vd = False
-                for idx, row in st.session_state.items_vd.iterrows():
-                    bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
-                    pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
-                    desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
-                    
-                    match_key = None
-                    if bc_val in bc_catalog_vd: match_key = bc_val
-                    elif pt_val in bc_catalog_vd: match_key = pt_val
+                if not st.session_state.items_vd.empty:
+                    bc_catalog_vd = get_known_descriptions()
+                    has_changes_vd = False
+                    for idx, row in st.session_state.items_vd.iterrows():
+                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
+                        pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
+                        desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
+                        
+                        match_key = None
+                        if bc_val in bc_catalog_vd: match_key = bc_val
+                        elif pt_val in bc_catalog_vd: match_key = pt_val
 
-                    if match_key and not desc_val:
-                        st.session_state.items_vd.at[idx, "Descripcion"] = bc_catalog_vd[match_key]
-                        has_changes_vd = True
-                
-                if has_changes_vd:
-                    st.rerun()
+                        if match_key and not desc_val:
+                            st.session_state.items_vd.at[idx, "Descripcion"] = bc_catalog_vd[match_key]
+                            has_changes_vd = True
+
+                    if has_changes_vd:
+                        st.rerun()
             
             submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
