@@ -298,20 +298,25 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_entry' not in st.session_state:
                     st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                # Sincronización directa con el estado de la sesión para evitar pérdida de datos
-                st.session_state.items_entry = st.data_editor(
+                # Limpiamos el índice para evitar que se muestre una columna sin nombre y asegurar estabilidad
+                st.session_state.items_entry = st.session_state.items_entry.reset_index(drop=True)
+
+                # Capturamos la edición y actualizamos el estado inmediatamente
+                edited_items = st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
+                    column_order=["No. BC", "Description", "Shipper", "Qty", "Unit Price"],
                     key="editor_recepcion_bc"
                 )
+                st.session_state.items_entry = edited_items
 
                 # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
-                if not st.session_state.items_entry.empty:
+                if not edited_items.empty:
                     bc_catalog = get_known_descriptions()
                     has_changes = False
-                    for idx, row in st.session_state.items_entry.iterrows():
+                    for idx, row in edited_items.iterrows():
                         bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
                         desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
                         
@@ -335,23 +340,28 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_vd' not in st.session_state:
                     st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"])
 
-                st.session_state.items_vd = st.data_editor(
+                # Limpiar índice y asegurar orden de columnas
+                st.session_state.items_vd = st.session_state.items_vd.reset_index(drop=True)
+
+                edited_items_vd = st.data_editor(
                     st.session_state.items_vd,
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
+                    column_order=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"],
                     column_config={
                         "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
                         "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                     },
                     key="editor_vd"
                 )
+                st.session_state.items_vd = edited_items_vd
 
                 # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
-                if not st.session_state.items_vd.empty:
+                if not edited_items_vd.empty:
                     bc_catalog_vd = get_known_descriptions()
                     has_changes_vd = False
-                    for idx, row in st.session_state.items_vd.iterrows():
+                    for idx, row in edited_items_vd.iterrows():
                         bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
                         pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
                         desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
