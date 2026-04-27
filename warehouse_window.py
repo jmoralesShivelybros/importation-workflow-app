@@ -298,31 +298,40 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_entry' not in st.session_state:
                     st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                # Limpiamos el índice para evitar que se muestre una columna sin nombre y asegurar estabilidad
-                st.session_state.items_entry = st.session_state.items_entry.reset_index(drop=True)
-
-                # Capturamos la edición y actualizamos el estado inmediatamente
+                # Editor de datos con configuración de columnas para evitar borrado de datos y tipos
                 edited_items = st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
                     column_order=["No. BC", "Description", "Shipper", "Qty", "Unit Price"],
+                    column_config={
+                        "No. BC": st.column_config.TextColumn("No. BC"),
+                        "Description": st.column_config.TextColumn("Description"),
+                        "Qty": st.column_config.NumberColumn("Qty", format="%.2f", min_value=0),
+                        "Unit Price": st.column_config.NumberColumn("Unit Price", format="$%.2f", min_value=0),
+                    },
                     key="editor_recepcion_bc"
                 )
-                st.session_state.items_entry = edited_items
 
-                # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
-                if not edited_items.empty:
+                # --- SINCRONIZACIÓN Y AUTOCOMPLETADO (PC) ---
+                # Comparamos si hubo cambios para guardar todo (incluyendo Qty) antes del autocompletado
+                if not edited_items.equals(st.session_state.items_entry):
+                    # Guardamos el estado actual del editor para preservar lo que el usuario escribió
+                    st.session_state.items_entry = edited_items.reset_index(drop=True)
+                    
                     bc_catalog = get_known_descriptions()
                     has_changes = False
-                    for idx, row in edited_items.iterrows():
-                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
-                        desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
+                    
+                    for idx, row in st.session_state.items_entry.iterrows():
+                        bc_val = str(row.get("No. BC", "")).strip().upper() if pd.notna(row.get("No. BC")) else ""
+                        desc_val = str(row.get("Description", "")).strip() if pd.notna(row.get("Description")) else ""
                         
-                        if bc_val and not desc_val and bc_val in bc_catalog:
-                            st.session_state.items_entry.at[idx, "Description"] = bc_catalog[bc_val]
-                            has_changes = True
+                        # Si BC tiene valor pero Descripción está vacía, buscamos en catálogo
+                        if bc_val and bc_val != "NAN" and (not desc_val or desc_val.lower() == "nan"):
+                            if bc_val in bc_catalog:
+                                st.session_state.items_entry.at[idx, "Description"] = bc_catalog[bc_val]
+                                has_changes = True
 
                     if has_changes:
                         st.rerun()
@@ -340,9 +349,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_vd' not in st.session_state:
                     st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"])
 
-                # Limpiar índice y asegurar orden de columnas
-                st.session_state.items_vd = st.session_state.items_vd.reset_index(drop=True)
-
+                # Editor para Registro Manual / Venta Directa
                 edited_items_vd = st.data_editor(
                     st.session_state.items_vd,
                     num_rows="dynamic",
@@ -350,22 +357,33 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     width="stretch",
                     column_order=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"],
                     column_config={
+                        "No. BC": st.column_config.TextColumn("No. BC"),
                         "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
+                        "Qty": st.column_config.NumberColumn("Qty", format="%.2f", min_value=0),
                         "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                     },
                     key="editor_vd"
                 )
-                st.session_state.items_vd = edited_items_vd
 
-                # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
-                if not edited_items_vd.empty:
+                # --- SINCRONIZACIÓN Y AUTOCOMPLETADO (Manual/VD) ---
+                if not edited_items_vd.equals(st.session_state.items_vd):
+                    # Guardar cambios actuales para no perder nada al refrescar
+                    st.session_state.items_vd = edited_items_vd.reset_index(drop=True)
+                    
                     bc_catalog_vd = get_known_descriptions()
                     has_changes_vd = False
-                    for idx, row in edited_items_vd.iterrows():
-                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
-                        pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
-                        desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
+                    
+                    for idx, row in st.session_state.items_vd.iterrows():
+                        bc_val = str(row.get("No. BC", "")).strip().upper() if pd.notna(row.get("No. BC")) else ""
+                        pt_val = str(row.get("No. Parte (PT)", "")).strip().upper() if pd.notna(row.get("No. Parte (PT)")) else ""
+                        desc_val = str(row.get("Descripcion", "")).strip() if pd.notna(row.get("Descripcion")) else ""
                         
+                        # Si no hay identificador o ya tiene descripción, ignorar
+                        if not (bc_val and bc_val != "NAN") and not (pt_val and pt_val != "NAN"):
+                            continue
+                        if desc_val and desc_val.lower() != "nan":
+                            continue
+
                         match_key = None
                         if bc_val in bc_catalog_vd: match_key = bc_val
                         elif pt_val in bc_catalog_vd: match_key = pt_val
