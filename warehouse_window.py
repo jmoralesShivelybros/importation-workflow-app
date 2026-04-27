@@ -213,34 +213,30 @@ def load_data():
         conn.close()
     return df
 
+@st.cache_data(ttl=60)
 def get_known_descriptions():
-    """Obtiene un diccionario de mapeo {numero_parte/BC: descripcion} desde el inventario existente."""
+    """Obtiene un catálogo consolidado de números de parte y descripciones de forma eficiente."""
     conn = get_db_connection()
     mapping = {}
-    if not conn:
-        return mapping
+    if not conn: return mapping
     try:
         cursor = conn.cursor()
-        # 1. Buscar en Inventario actual
-        cursor.execute("SELECT DISTINCT numero_parte, descripcion FROM inventory WHERE numero_parte IS NOT NULL AND numero_parte != ''")
-        for (np, desc) in cursor.fetchall():
-            if np and desc:
-                mapping[str(np).strip().upper()] = str(desc).strip()
-        
-        # 2. Buscar en Bitácora Histórica (numero_parte y n_bc)
-        cursor.execute("SELECT DISTINCT numero_parte, descripcion FROM daily_logs WHERE numero_parte IS NOT NULL AND numero_parte != ''")
-        for (np, desc) in cursor.fetchall():
-            np_clean = str(np).strip().upper()
-            if np_clean and desc and np_clean not in mapping:
-                mapping[np_clean] = str(desc).strip()
-
-        cursor.execute("SELECT DISTINCT n_bc, descripcion FROM daily_logs WHERE n_bc IS NOT NULL AND n_bc != ''")
-        for (bc, desc) in cursor.fetchall():
-            bc_clean = str(bc).strip().upper()
-            if bc_clean and desc and bc_clean not in mapping:
-                mapping[bc_clean] = str(desc).strip()
-    finally:
-        conn.close()
+        # Combinamos todas las fuentes posibles (n_bc, numero_parte) en una sola consulta
+        # Priorizamos el inventario más reciente sobre los logs históricos
+        query = """
+            SELECT val, descripcion FROM (
+                SELECT n_bc AS val, descripcion FROM daily_logs WHERE n_bc != '' AND descripcion != ''
+                UNION
+                SELECT numero_parte AS val, descripcion FROM daily_logs WHERE numero_parte != '' AND descripcion != ''
+                UNION
+                SELECT numero_parte AS val, descripcion FROM inventory WHERE numero_parte != '' AND descripcion != ''
+            ) AS combined WHERE val IS NOT NULL AND descripcion IS NOT NULL
+        """
+        cursor.execute(query)
+        for (val, desc) in cursor.fetchall():
+            mapping[str(val).strip().upper()] = str(desc).strip()
+    except Exception: pass
+    finally: conn.close()
     return mapping
 
 def log_movement(item_id, accion, detalle, usuario="Almacenista"):
@@ -349,9 +345,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_vd' not in st.session_state:
                     st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"])
 
-                # Editor para Registro Manual / Venta Directa
-                edited_items_vd = st.data_editor(
-                    st.session_state.items_vd,
+                # Editor estable para Venta Directa
+                st.session_state.items_vd = st.data_editor(
+                    st.session_state.items_vd.reset_index(drop=True),
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
@@ -359,41 +355,28 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     column_config={
                         "No. BC": st.column_config.TextColumn("No. BC"),
                         "Descripcion": st.column_config.TextColumn("Descripción", width="large"),
-                        "Qty": st.column_config.NumberColumn("Qty", format="%.2f", min_value=0),
+                        "Qty": st.column_config.NumberColumn("Qty", min_value=0),
                         "Comentarios": st.column_config.TextColumn("Comentarios", width="large"),
                     },
                     key="editor_vd"
                 )
-
-                # --- SINCRONIZACIÓN Y AUTOCOMPLETADO (Manual/VD) ---
-                if not edited_items_vd.equals(st.session_state.items_vd):
-                    # Guardar cambios actuales para no perder nada al refrescar
-                    st.session_state.items_vd = edited_items_vd.reset_index(drop=True)
+                
+                # --- AUTOCOMPLETADO INTELIGENTE (VD) ---
+                catalog_vd = get_known_descriptions()
+                has_changes_vd = False
+                for idx, row in st.session_state.items_vd.iterrows():
+                    bc = str(row.get("No. BC", "")).strip().upper()
+                    pt = str(row.get("No. Parte (PT)", "")).strip().upper()
+                    desc = str(row.get("Descripcion", "")).strip()
                     
-                    bc_catalog_vd = get_known_descriptions()
-                    has_changes_vd = False
-                    
-                    for idx, row in st.session_state.items_vd.iterrows():
-                        bc_val = str(row.get("No. BC", "")).strip().upper() if pd.notna(row.get("No. BC")) else ""
-                        pt_val = str(row.get("No. Parte (PT)", "")).strip().upper() if pd.notna(row.get("No. Parte (PT)")) else ""
-                        desc_val = str(row.get("Descripcion", "")).strip() if pd.notna(row.get("Descripcion")) else ""
-                        
-                        # Si no hay identificador o ya tiene descripción, ignorar
-                        if not (bc_val and bc_val != "NAN") and not (pt_val and pt_val != "NAN"):
-                            continue
-                        if desc_val and desc_val.lower() != "nan":
-                            continue
-
-                        match_key = None
-                        if bc_val in bc_catalog_vd: match_key = bc_val
-                        elif pt_val in bc_catalog_vd: match_key = pt_val
-
-                        if match_key and not desc_val:
-                            st.session_state.items_vd.at[idx, "Descripcion"] = bc_catalog_vd[match_key]
+                    if (not desc or desc == "" or desc.lower() == "nan"):
+                        match_key = bc if bc in catalog_vd else (pt if pt in catalog_vd else None)
+                        if match_key:
+                            st.session_state.items_vd.at[idx, "Descripcion"] = catalog_vd[match_key]
                             has_changes_vd = True
-
-                    if has_changes_vd:
-                        st.rerun()
+                
+                if has_changes_vd:
+                    st.rerun()
             
             submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
