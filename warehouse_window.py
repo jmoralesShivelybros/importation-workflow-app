@@ -221,12 +221,24 @@ def get_known_descriptions():
         return mapping
     try:
         cursor = conn.cursor()
-        # Buscamos combinaciones únicas de número de parte y descripción
+        # 1. Buscar en Inventario actual
         cursor.execute("SELECT DISTINCT numero_parte, descripcion FROM inventory WHERE numero_parte IS NOT NULL AND numero_parte != ''")
         for (np, desc) in cursor.fetchall():
             if np and desc:
-                # Guardamos las llaves en MAYÚSCULAS para búsqueda insensible a caja
                 mapping[str(np).strip().upper()] = str(desc).strip()
+        
+        # 2. Buscar en Bitácora Histórica (numero_parte y n_bc)
+        cursor.execute("SELECT DISTINCT numero_parte, descripcion FROM daily_logs WHERE numero_parte IS NOT NULL AND numero_parte != ''")
+        for (np, desc) in cursor.fetchall():
+            np_clean = str(np).strip().upper()
+            if np_clean and desc and np_clean not in mapping:
+                mapping[np_clean] = str(desc).strip()
+
+        cursor.execute("SELECT DISTINCT n_bc, descripcion FROM daily_logs WHERE n_bc IS NOT NULL AND n_bc != ''")
+        for (bc, desc) in cursor.fetchall():
+            bc_clean = str(bc).strip().upper()
+            if bc_clean and desc and bc_clean not in mapping:
+                mapping[bc_clean] = str(desc).strip()
     finally:
         conn.close()
     return mapping
@@ -286,7 +298,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_entry' not in st.session_state:
                     st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                edited_items = st.data_editor(
+                # Sincronización directa con el estado de la sesión para evitar pérdida de datos
+                st.session_state.items_entry = st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
@@ -295,23 +308,18 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (PC) ---
-                if not edited_items.equals(st.session_state.items_entry):
-                    new_items = edited_items.copy()
-                    bc_catalog = get_known_descriptions()
-                    has_changes = False
-                    for idx, row in new_items.iterrows():
-                        # Búsqueda normalizada en mayúsculas
-                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
-                        desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
-                        
-                        if bc_val and not desc_val and bc_val in bc_catalog:
-                            new_items.at[idx, "Description"] = bc_catalog[bc_val]
-                            has_changes = True
+                bc_catalog = get_known_descriptions()
+                has_changes = False
+                for idx, row in st.session_state.items_entry.iterrows():
+                    bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
+                    desc_val = str(row["Description"]).strip() if pd.notna(row["Description"]) else ""
                     
-                    # Guardar siempre con el index reseteado para evitar la columna sin nombre
-                    st.session_state.items_entry = new_items.reset_index(drop=True)
-                    if has_changes:
-                        st.rerun()
+                    if bc_val and not desc_val and bc_val in bc_catalog:
+                        st.session_state.items_entry.at[idx, "Description"] = bc_catalog[bc_val]
+                        has_changes = True
+                
+                if has_changes:
+                    st.rerun()
 
                 submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
@@ -326,7 +334,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_vd' not in st.session_state:
                     st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"])
 
-                edited_items_vd = st.data_editor(
+                st.session_state.items_vd = st.data_editor(
                     st.session_state.items_vd,
                     num_rows="dynamic",
                     hide_index=True,
@@ -339,29 +347,23 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 )
 
                 # --- LÓGICA DE AUTOCOMPLETADO (Manual/VD) ---
-                if not edited_items_vd.equals(st.session_state.items_vd):
-                    new_items_vd = edited_items_vd.copy()
-                    bc_catalog = get_known_descriptions()
-                    has_changes_vd = False
-                    for idx, row in new_items_vd.iterrows():
-                        # Normalizar entradas a mayúsculas para la comparación
-                        bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
-                        pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
-                        desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
-                        
-                        # Intentar coincidencia con BC o con PT (insensible a mayúsculas)
-                        match_key = None
-                        if bc_val in bc_catalog: match_key = bc_val
-                        elif pt_val in bc_catalog: match_key = pt_val
-
-                        if match_key and not desc_val:
-                            new_items_vd.at[idx, "Descripcion"] = bc_catalog[match_key]
-                            has_changes_vd = True
+                bc_catalog_vd = get_known_descriptions()
+                has_changes_vd = False
+                for idx, row in st.session_state.items_vd.iterrows():
+                    bc_val = str(row["No. BC"]).strip().upper() if pd.notna(row["No. BC"]) else ""
+                    pt_val = str(row["No. Parte (PT)"]).strip().upper() if pd.notna(row["No. Parte (PT)"]) else ""
+                    desc_val = str(row["Descripcion"]).strip() if pd.notna(row["Descripcion"]) else ""
                     
-                    # Guardar con index reseteado para prevenir la columna extra sin nombre
-                    st.session_state.items_vd = new_items_vd.reset_index(drop=True)
-                    if has_changes_vd:
-                        st.rerun()
+                    match_key = None
+                    if bc_val in bc_catalog_vd: match_key = bc_val
+                    elif pt_val in bc_catalog_vd: match_key = pt_val
+
+                    if match_key and not desc_val:
+                        st.session_state.items_vd.at[idx, "Descripcion"] = bc_catalog_vd[match_key]
+                        has_changes_vd = True
+                
+                if has_changes_vd:
+                    st.rerun()
             
             submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
@@ -603,7 +605,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
-            if not pc_number or not invoice_number_pc or edited_items.empty:
+            if not pc_number or not invoice_number_pc or st.session_state.items_entry.empty:
                 st.error("Para entradas de PC, completa el PC, Factura y agrega al menos un artículo.")
             else:
                 with st.spinner("Procesando entrada de PC..."):
@@ -613,7 +615,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     daily_log_rows = []
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    for index, row in edited_items.iterrows():
+                    for index, row in st.session_state.items_entry.iterrows():
                         # Validar que al menos tenga No. BC
                         if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue
                         
@@ -678,10 +680,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 2 (VENTA DIRECTA) ---
         if submitted_vd:
-            if edited_items_vd.empty:
+            if st.session_state.items_vd.empty:
                 st.error("Por favor, agregue al menos un registro en la tabla para guardar.")
             # Check for required fields in the table
-            elif edited_items_vd["No. Factura"].isnull().all() or edited_items_vd["Descripcion"].isnull().all():
+            elif st.session_state.items_vd["No. Factura"].isnull().all() or st.session_state.items_vd["Descripcion"].isnull().all():
                 st.error("Para cada registro, por favor completa al menos 'No. Factura' y 'Descripción'.")
             else:
                 with st.spinner("Registrando en bitácora..."):
@@ -693,7 +695,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         timestamp = datetime.now()
                         
                         entries_to_insert = []
-                        for index, row in edited_items_vd.iterrows():
+                        for index, row in st.session_state.items_vd.iterrows():
                             # Skip empty rows that might be added in the editor
                             if pd.isna(row.get("No. Factura")) or pd.isna(row.get("Descripcion")):
                                 continue
@@ -736,7 +738,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             log_movement(f"BIT-BATCH", "REGISTRO_MANUAL_MASIVO", log_detail, usuario=vd_nombre)
                             
                             st.success(f"✅ {len(entries_to_insert)} registros guardados en la bitácora correctamente.")
-                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Comentarios"]) 
+                            st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"]) 
                             time.sleep(1.5)
                             st.rerun()
                         else:
