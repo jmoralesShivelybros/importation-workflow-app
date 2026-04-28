@@ -27,7 +27,9 @@ def set_converter_view():
 
 def main():
     st.set_page_config(layout="wide", page_title="Sistema de Logística")
-    st.title("📦 Sistema de Logística Web")
+    app_mode = st.session_state.get('app_mode')
+    if app_mode != "Monitor TV":
+        st.title("📦 Sistema de Logística Web")
 
     # Usamos la ruta base del proyecto para que las carpetas sean relativas.
     # Esto evita el uso de carpetas /tmp aleatorias y mantiene la estructura local.

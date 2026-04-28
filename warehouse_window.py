@@ -337,7 +337,8 @@ def log_movement(item_id, accion, detalle, usuario="Almacenista"):
     conn.close()
 
 def render_warehouse_page(folder_manager, section="Recepción de Material"):
-    st.header(f"🏭 Almacén: {section}")
+    if section != "Monitor TV":
+        st.header(f"🏭 Almacén: {section}")
 
     # Inicializar DB solo una vez por sesión para evitar saturar la conexión
     if 'db_initialized' not in st.session_state:
@@ -1143,10 +1144,24 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
     # --- SECCIÓN: MONITOR TV ---
     elif section == "Monitor TV":
-        st.markdown("### 📺 Monitor de Rutas y Salidas")
-
         if 'monitor_tv_auto_refresh' not in st.session_state:
             st.session_state['monitor_tv_auto_refresh'] = True
+
+        st.markdown(
+            """
+            <style>
+                .streamlit-expanderHeader { font-size: 2.2rem !important; }
+                div.block-container h1:first-of-type, div.block-container h2:first-of-type, div.block-container h3:first-of-type { display: none !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        auto_refresh = st.checkbox(
+            "🔄 Auto-refrescar (Modo TV)",
+            value=st.session_state['monitor_tv_auto_refresh'],
+            key='monitor_tv_auto_refresh'
+        )
 
         auto_refresh = st.checkbox(
             "🔄 Auto-refrescar (Modo TV)",
@@ -1242,8 +1257,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     FROM routes r
                     JOIN route_items ri ON r.id = ri.route_id
                     JOIN inventory i ON ri.item_id = i.id
-                    WHERE (r.estatus != 'Completada' OR r.estatus IS NULL) 
-                       OR (r.estatus = 'Completada' AND DATE(r.timestamp) = CURDATE())
+                    WHERE r.estatus IS NULL OR r.estatus != 'Completada'
                     ORDER BY r.timestamp DESC
                     LIMIT 50
                 """
