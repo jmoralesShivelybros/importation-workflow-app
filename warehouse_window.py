@@ -239,6 +239,77 @@ def get_known_descriptions():
     finally: conn.close()
     return mapping
 
+def on_recepcion_change():
+    """Callback para autocompletar descripciones en la recepción por PC."""
+    state = st.session_state.editor_recepcion_bc
+    if not state or not state.get("edited_rows"):
+        return
+
+    bc_catalog = get_known_descriptions()
+    df = st.session_state.items_entry
+
+    # Procesar solo las filas editadas
+    for row_idx_str, changes in state["edited_rows"].items():
+        row_idx = int(row_idx_str)
+        
+        # Si se editó el No. BC, buscamos la descripción
+        if "No. BC" in changes:
+            bc_val = str(changes["No. BC"]).strip().upper()
+            if bc_val in bc_catalog:
+                # Actualizamos directamente el DataFrame en session_state
+                # Esto es seguro porque sucede en el callback antes del render
+                df.at[row_idx, "Description"] = bc_catalog[bc_val]
+        
+        # Actualizar otros campos que el usuario editó para mantener sincronía
+        for col, val in changes.items():
+            if col in df.columns:
+                df.at[row_idx, col] = val
+
+    # Manejar filas agregadas
+    if state.get("added_rows"):
+        for row in state["added_rows"]:
+            bc_val = str(row.get("No. BC", "")).strip().upper()
+            if bc_val in bc_catalog and (not row.get("Description")):
+                row["Description"] = bc_catalog[bc_val]
+            
+            # Creamos un nuevo registro limpio
+            new_item = {col: row.get(col, None) for col in df.columns}
+            st.session_state.items_entry = pd.concat([df, pd.DataFrame([new_item])], ignore_index=True)
+
+def on_vd_change():
+    """Callback para autocompletar descripciones en Venta Directa."""
+    state = st.session_state.editor_vd
+    if not state or not state.get("edited_rows"):
+        return
+
+    catalog = get_known_descriptions()
+    df = st.session_state.items_vd
+
+    for row_idx_str, changes in state["edited_rows"].items():
+        row_idx = int(row_idx_str)
+        
+        # Buscar por BC o por PT
+        match_key = None
+        if "No. BC" in changes: match_key = str(changes["No. BC"]).strip().upper()
+        elif "No. Parte (PT)" in changes: match_key = str(changes["No. Parte (PT)"]).strip().upper()
+
+        if match_key and match_key in catalog:
+            df.at[row_idx, "Descripcion"] = catalog[match_key]
+            
+        # Sincronizar cambios manuales
+        for col, val in changes.items():
+            if col in df.columns:
+                df.at[row_idx, col] = val
+
+    # Manejar filas agregadas
+    if state.get("added_rows"):
+        for row in state["added_rows"]:
+            bc = str(row.get("No. BC", "")).strip().upper()
+            pt = str(row.get("No. Parte (PT)", "")).strip().upper()
+            match = bc if bc in catalog else (pt if pt in catalog else None)
+            if match: row["Descripcion"] = catalog[match]
+            st.session_state.items_vd = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+
 def log_movement(item_id, accion, detalle, usuario="Almacenista"):
     """Registra un movimiento en la tabla de logs."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -294,12 +365,13 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if 'items_entry' not in st.session_state:
                     st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
 
-                # Editor de datos con configuración de columnas para evitar borrado de datos y tipos
-                edited_items = st.data_editor(
+                # Editor optimizado con callback
+                st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
+                    on_change=on_recepcion_change,
                     column_order=["No. BC", "Description", "Shipper", "Qty", "Unit Price"],
                     column_config={
                         "No. BC": st.column_config.TextColumn("No. BC"),
@@ -309,28 +381,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     },
                     key="editor_recepcion_bc"
                 )
-
-                # --- SINCRONIZACIÓN Y AUTOCOMPLETADO (PC) ---
-                # Comparamos si hubo cambios para guardar todo (incluyendo Qty) antes del autocompletado
-                if not edited_items.equals(st.session_state.items_entry):
-                    # Guardamos el estado actual del editor para preservar lo que el usuario escribió
-                    st.session_state.items_entry = edited_items.reset_index(drop=True)
-                    
-                    bc_catalog = get_known_descriptions()
-                    has_changes = False
-                    
-                    for idx, row in st.session_state.items_entry.iterrows():
-                        bc_val = str(row.get("No. BC", "")).strip().upper() if pd.notna(row.get("No. BC")) else ""
-                        desc_val = str(row.get("Description", "")).strip() if pd.notna(row.get("Description")) else ""
-                        
-                        # Si BC tiene valor pero Descripción está vacía, buscamos en catálogo
-                        if bc_val and bc_val != "NAN" and (not desc_val or desc_val.lower() == "nan"):
-                            if bc_val in bc_catalog:
-                                st.session_state.items_entry.at[idx, "Description"] = bc_catalog[bc_val]
-                                has_changes = True
-
-                    if has_changes:
-                        st.rerun()
 
                 submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
@@ -346,11 +396,12 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.session_state.items_vd = pd.DataFrame(columns=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"])
 
                 # Editor estable para Venta Directa
-                st.session_state.items_vd = st.data_editor(
+                st.data_editor(
                     st.session_state.items_vd.reset_index(drop=True),
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
+                    on_change=on_vd_change,
                     column_order=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"],
                     column_config={
                         "No. BC": st.column_config.TextColumn("No. BC"),
@@ -360,23 +411,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     },
                     key="editor_vd"
                 )
-                
-                # --- AUTOCOMPLETADO INTELIGENTE (VD) ---
-                catalog_vd = get_known_descriptions()
-                has_changes_vd = False
-                for idx, row in st.session_state.items_vd.iterrows():
-                    bc = str(row.get("No. BC", "")).strip().upper()
-                    pt = str(row.get("No. Parte (PT)", "")).strip().upper()
-                    desc = str(row.get("Descripcion", "")).strip()
-                    
-                    if (not desc or desc == "" or desc.lower() == "nan"):
-                        match_key = bc if bc in catalog_vd else (pt if pt in catalog_vd else None)
-                        if match_key:
-                            st.session_state.items_vd.at[idx, "Descripcion"] = catalog_vd[match_key]
-                            has_changes_vd = True
-                
-                if has_changes_vd:
-                    st.rerun()
             
             submitted_vd = st.button("Registrar en Bitácora", use_container_width=True)
 
