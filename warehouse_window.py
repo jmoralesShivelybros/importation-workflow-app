@@ -276,6 +276,18 @@ def on_recepcion_change():
     # Guardar el DataFrame maestro actualizado
     st.session_state.items_entry = df
 
+def has_valid_pc_items(df: pd.DataFrame) -> bool:
+    """Verifica si hay al menos un artículo válido para una entrada PC."""
+    if df is None or df.empty:
+        return False
+    for _, row in df.iterrows():
+        if pd.notna(row.get("No. BC")) and str(row["No. BC"]).strip() != "":
+            return True
+        if pd.notna(row.get("Description")) and str(row["Description"]).strip() != "":
+            return True
+    return False
+
+
 def on_vd_change():
     """Callback para autocompletar descripciones en Venta Directa."""
     editor_state = st.session_state.editor_vd
@@ -364,25 +376,27 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             with st.container(border=True):
                 st.markdown("###### Detalles de los Artículos")
                 if 'items_entry' not in st.session_state:
-                    st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"])
+                    st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty"])
+
+                st.session_state.items_entry = st.session_state.items_entry.reset_index(drop=True)
 
                 # Editor optimizado con callback
-                st.data_editor(
+                items_entry_df = st.data_editor(
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
                     width="stretch",
                     on_change=on_recepcion_change,
-                    column_order=["No. BC", "Description", "Shipper", "Qty", "Unit Price"],
+                    column_order=["No. BC", "Description", "Shipper", "Qty"],
                     column_config={
                         "No. BC": st.column_config.TextColumn("No. BC"),
                         "Description": st.column_config.TextColumn("Description"),
                         "Qty": st.column_config.NumberColumn("Qty", format="%.2f", min_value=0),
-                        "Unit Price": st.column_config.NumberColumn("Unit Price", format="$%.2f", min_value=0),
                     },
                     key="editor_recepcion_bc"
                 )
 
+                st.session_state.items_entry = items_entry_df
                 submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
         with tab2:
@@ -653,7 +667,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
-            if not pc_number or not invoice_number_pc or st.session_state.items_entry.empty:
+            if not pc_number or not invoice_number_pc or not has_valid_pc_items(st.session_state.items_entry):
                 st.error("Para entradas de PC, completa el PC, Factura y agrega al menos un artículo.")
             else:
                 with st.spinner("Procesando entrada de PC..."):
@@ -665,18 +679,15 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     
                     for index, row in st.session_state.items_entry.iterrows():
                         # Validar que al menos tenga No. BC
-                        if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue
-                        if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue # type: ignore
+                        if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "":
+                            continue
                         
                         # Conversión segura de valores numéricos para evitar NaN en MySQL
                         try:
                             qty = float(row["Qty"]) if pd.notna(row["Qty"]) else 0.0
                         except (ValueError, TypeError):
                             qty = 0.0
-                        try:
-                            price = float(row["Unit Price"]) if pd.notna(row["Unit Price"]) else 0.0
-                        except (ValueError, TypeError):
-                            price = 0.0
+                        price = 0.0
                         
                         item_id = str(uuid.uuid4())[:8]
 
@@ -722,7 +733,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                             conn.close()
                             st.success(f"✅ Se registraron {len(new_rows)} artículos en inventario.")
                             # Resetear tabla y aumentar iterador para limpiar campos de texto (sin la columna 'No.')
-                            st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty", "Unit Price"]) 
+                            st.session_state.items_entry = pd.DataFrame(columns=["No. BC", "Description", "Shipper", "Qty"]) 
                             st.session_state.form_iter += 1
                             
                             time.sleep(1)
