@@ -249,16 +249,11 @@ def on_recepcion_change():
     df = st.session_state.items_entry
 
     # Procesar solo las filas editadas
-    for row_idx_str, changes in state["edited_rows"].items():
+    for row_idx_str, changes in state["edited_rows"].items(): # type: ignore
         row_idx = int(row_idx_str)
         
-        # Si se editó el No. BC, buscamos la descripción
-        if "No. BC" in changes:
-            bc_val = str(changes["No. BC"]).strip().upper()
-            if bc_val in bc_catalog:
-                # Actualizamos directamente el DataFrame en session_state
-                # Esto es seguro porque sucede en el callback antes del render
-                df.at[row_idx, "Description"] = bc_catalog[bc_val]
+        # La lógica de autocompletado de descripción por No. BC se moverá al botón de registro.
+        # Aquí solo sincronizamos los cambios manuales del usuario.
         
         # Actualizar otros campos que el usuario editó para mantener sincronía
         for col, val in changes.items():
@@ -267,14 +262,9 @@ def on_recepcion_change():
 
     # Manejar filas agregadas
     if state.get("added_rows"):
-        for row in state["added_rows"]:
-            bc_val = str(row.get("No. BC", "")).strip().upper()
-            if bc_val in bc_catalog and (not row.get("Description")):
-                row["Description"] = bc_catalog[bc_val]
-            
-            # Creamos un nuevo registro limpio
-            new_item = {col: row.get(col, None) for col in df.columns}
-            st.session_state.items_entry = pd.concat([df, pd.DataFrame([new_item])], ignore_index=True)
+        # Concatenamos las filas añadidas directamente, la descripción se llenará al guardar.
+        added_df = pd.DataFrame(state["added_rows"]) # type: ignore
+        st.session_state.items_entry = pd.concat([df, added_df], ignore_index=True)
 
 def on_vd_change():
     """Callback para autocompletar descripciones en Venta Directa."""
@@ -657,6 +647,20 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             else:
                 with st.spinner("Procesando entrada de PC..."):
                     # (Lógica de procesamiento para entradas de PC)
+                    
+                    # --- NUEVA LÓGICA: Autocompletar descripciones antes de guardar ---
+                    bc_catalog = get_known_descriptions()
+                    df_items_entry = st.session_state.items_entry.copy() # Trabajar con una copia
+                    
+                    for index, row in df_items_entry.iterrows():
+                        bc_val = str(row.get("No. BC", "")).strip().upper()
+                        desc_val = str(row.get("Description", "")).strip()
+                        
+                        # Si No. BC tiene valor y la descripción está vacía, buscar en el catálogo
+                        if bc_val and bc_val != "NAN" and (not desc_val or desc_val.lower() == "nan"):
+                            if bc_val in bc_catalog:
+                                df_items_entry.at[index, "Description"] = bc_catalog[bc_val]
+                    # --- FIN NUEVA LÓGICA ---
                  
                     new_rows = []
                     daily_log_rows = []
@@ -664,7 +668,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     
                     for index, row in st.session_state.items_entry.iterrows():
                         # Validar que al menos tenga No. BC
-                        if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue
+                        if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "": continue # type: ignore
                         
                         # Conversión segura de valores numéricos para evitar NaN en MySQL
                         try:
@@ -678,7 +682,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                         
                         item_id = str(uuid.uuid4())[:8]
 
-                        # Priorizar No. BC de la tabla, si no, usar el general del form
+                        # Priorizar No. BC de la tabla, si no, usar el general del form (aunque el form no tiene un No. BC general)
                         bc_final = row["No. BC"] if pd.notna(row["No. BC"]) and str(row["No. BC"]).strip() != "" else consecutivo_pc
 
                         raw_desc = str(row['Description']).strip() if pd.notna(row['Description']) else ""
