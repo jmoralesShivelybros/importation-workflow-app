@@ -396,7 +396,10 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     key="editor_recepcion_bc"
                 )
 
-                st.session_state.items_entry = items_entry_df
+                if items_entry_df is not None:
+                    items_entry_df = items_entry_df.reset_index(drop=True)
+                    st.session_state.items_entry = items_entry_df
+
                 submitted_pc = st.button("Registrar Entrada de PC", type="primary", use_container_width=True)
         
         with tab2:
@@ -667,7 +670,8 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         # --- LÓGICA DE PROCESAMIENTO PARA FORMULARIO 1 (PC) ---
         if submitted_pc:
-            if not pc_number or not invoice_number_pc or not has_valid_pc_items(st.session_state.items_entry):
+            items_for_submit = st.session_state.items_entry.copy() if 'items_entry' in st.session_state else pd.DataFrame()
+            if not pc_number or not invoice_number_pc or not has_valid_pc_items(items_for_submit):
                 st.error("Para entradas de PC, completa el PC, Factura y agrega al menos un artículo.")
             else:
                 with st.spinner("Procesando entrada de PC..."):
@@ -677,7 +681,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     daily_log_rows = []
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    for index, row in st.session_state.items_entry.iterrows():
+                    for index, row in items_for_submit.iterrows():
                         # Validar que al menos tenga No. BC
                         if pd.isna(row["No. BC"]) or str(row["No. BC"]).strip() == "":
                             continue
