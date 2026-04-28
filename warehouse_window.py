@@ -1144,24 +1144,88 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
     # --- SECCIÓN: MONITOR TV ---
     elif section == "Monitor TV":
         st.markdown("### 📺 Monitor de Rutas y Salidas")
-        
-        auto_refresh = st.checkbox("🔄 Auto-refrescar (Modo TV)", value=False)
-        
+
+        if 'monitor_tv_auto_refresh' not in st.session_state:
+            st.session_state['monitor_tv_auto_refresh'] = True
+
+        auto_refresh = st.checkbox(
+            "🔄 Auto-refrescar (Modo TV)",
+            value=st.session_state['monitor_tv_auto_refresh'],
+            key='monitor_tv_auto_refresh'
+        )
+
+        refresh_delay = 10
+        last_refresh = datetime.now().strftime("%H:%M:%S")
+
+        st.markdown(
+            f"**Última actualización:** {last_refresh} · Refresca cada {refresh_delay} segundos cuando está activado."
+        )
+
+        st.markdown(
+            """
+            <style>
+                .monitor-tv-title { font-size: 3.0rem; font-weight: 700; margin-bottom: 0.2rem; }
+                .monitor-tv-info { font-size: 1.8rem; margin-bottom: 1.2rem; }
+                .monitor-tv-metric { background: #0f4c81; color: #ffffff; border-radius: 22px; padding: 24px 20px; text-align: center; margin-bottom: 16px; }
+                .monitor-tv-metric-label { font-size: 1.3rem; opacity: 0.9; margin-bottom: 10px; display: block; }
+                .monitor-tv-metric-value { font-size: 4.2rem; font-weight: 700; line-height: 1; }
+                .monitor-tv-route-card { border: 3px solid #0f4c81; border-radius: 24px; padding: 22px; margin-bottom: 24px; background: rgba(15, 76, 129, 0.08); }
+                .monitor-tv-route-title { font-size: 2.6rem; font-weight: 800; margin-bottom: 0.35rem; }
+                .monitor-tv-route-meta { font-size: 1.7rem; margin-bottom: 1rem; }
+                .monitor-tv-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+                .monitor-tv-table th, .monitor-tv-table td { border: 1px solid #d3d3d3; padding: 14px 12px; font-size: 1.7rem; }
+                .monitor-tv-table th { background: rgba(15, 76, 129, 0.14); }
+                .monitor-tv-table td { background: #ffffff; }
+                .monitor-tv-small-button { font-size: 1.6rem; padding: 8px 16px; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         # Métricas Generales
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("En Recepción", len(df_inventory[df_inventory["estatus"] == "Recibido"]))
-        m2.metric("En Mesa", len(df_inventory[df_inventory["estatus"] == "En Mesa/Clasificado"]))
-        m3.metric("Por Entregar", len(df_inventory[df_inventory["estatus"] == "Etiquetado"]))
+        total_recibido = len(df_inventory[df_inventory["estatus"] == "Recibido"])
+        total_mesa = len(df_inventory[df_inventory["estatus"] == "En Mesa/Clasificado"])
+        total_por_entregar = len(df_inventory[df_inventory["estatus"] == "Etiquetado"])
         total_inventario = df_inventory["cantidad"].sum() if not df_inventory.empty else 0
-        m4.metric("Total Inventario", f"{total_inventario:,.0f}")
+
+        cols = st.columns(4, gap="large")
+        for col, label, value in zip(
+            cols,
+            ["En Recepción", "En Mesa", "Por Entregar", "Total Inventario"],
+            [total_recibido, total_mesa, total_por_entregar, f"{total_inventario:,.0f}"]
+        ):
+            col.markdown(
+                f"<div class='monitor-tv-metric'><span class='monitor-tv-metric-label'>{label}</span><span class='monitor-tv-metric-value'>{value}</span></div>",
+                unsafe_allow_html=True,
+            )
 
         st.divider()
+
+        def escape_html(value):
+            return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        def render_route_items_html(items):
+            html = "<table class='monitor-tv-table'><thead><tr>"
+            headers = ["PC", "PT", "Descripción", "Cantidad", "Estatus", "Shipper"]
+            for header in headers:
+                html += f"<th>{header}</th>"
+            html += "</tr></thead><tbody>"
+            for _, row in items.iterrows():
+                html += "<tr>"
+                html += f"<td>{escape_html(row['pc'])}</td>"
+                html += f"<td>{escape_html(row['numero_parte'])}</td>"
+                html += f"<td>{escape_html(row['descripcion'])}</td>"
+                html += f"<td>{escape_html(row['cantidad'])}</td>"
+                html += f"<td>{escape_html(row['estatus'])}</td>"
+                html += f"<td>{escape_html(row['shipper'])}</td>"
+                html += "</tr>"
+            html += "</tbody></table>"
+            return html
 
         # --- VISTA POR RUTAS ---
         conn = get_db_connection()
         if conn:
             try:
-                # Consultar rutas y sus items uniendo las 3 tablas
                 query = """
                     SELECT 
                         r.id as route_id,
@@ -1188,46 +1252,37 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
                 if not df_routes.empty:
                     st.markdown("#### 🚚 Rutas en Tránsito / Recientes")
-                    
-                    # Agrupar por ID de ruta para mostrar una tarjeta por ruta
+
                     unique_routes = df_routes['route_id'].unique()
-                    
                     for r_id in unique_routes:
-                        # Filtrar items que pertenecen a esta ruta específica
                         items_ruta = df_routes[df_routes['route_id'] == r_id]
                         info_ruta = items_ruta.iloc[0]
-                        
-                        # Formatear fecha a Mes/Día/Año
+
                         try:
                             fecha_str = pd.to_datetime(info_ruta['timestamp']).strftime("%m/%d/%Y %I:%M %p")
                         except:
                             fecha_str = str(info_ruta['timestamp'])
-                        
-                        with st.container(border=True):
-                            # Encabezado de la Ruta
-                            c1, c2 = st.columns([3, 1])
-                            with c1:
-                                st.subheader(f"📍 Ruta #{r_id} | {info_ruta['destino']}")
-                                st.caption(f"🚛 Vehículo: {info_ruta['vehiculo']} | 👤 Responsable: {info_ruta['usuario']}")
-                            with c2:
-                                st.metric("Items", len(items_ruta))
-                            
-                            # Tabla de items dentro de la ruta
-                            st.dataframe(
-                                items_ruta[["pc", "numero_parte", "descripcion", "cantidad", "estatus", "shipper"]],
-                                width="stretch",
-                                hide_index=True
-                            )
+
+                        st.markdown(
+                            f"<div class='monitor-tv-route-card'>"
+                            f"<div class='monitor-tv-route-title'>📍 Ruta #{r_id} | {escape_html(info_ruta['destino'])}</div>"
+                            f"<div class='monitor-tv-route-meta'>🚛 {escape_html(info_ruta['vehiculo'])} · 👤 {escape_html(info_ruta['usuario'])} · 🕒 {escape_html(fecha_str)} · Items: {len(items_ruta)}</div>"
+                            f"{render_route_items_html(items_ruta)}"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.info("No hay rutas registradas recientemente.")
             except Exception as e:
                 st.error(f"Error al cargar rutas: {e}")
                 if conn: conn.close()
 
-        # Lógica de Auto-refresco
+        if st.button("🔄 Refrescar ahora", key="tv_refresh_now", use_container_width=True):
+            st.experimental_rerun()
+
         if auto_refresh:
-            time.sleep(10) # Refrescar cada 10 segundos
-            st.rerun()
+            time.sleep(refresh_delay)
+            st.experimental_rerun()
 
     # --- SECCIÓN: HISTORIAL ---
     elif section == "Historial":
