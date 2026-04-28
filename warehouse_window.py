@@ -241,80 +241,75 @@ def get_known_descriptions():
 
 def on_recepcion_change():
     """Callback para autocompletar descripciones en la recepción por PC."""
-    state = st.session_state.editor_recepcion_bc
-    if not state or not state.get("edited_rows"):
+    editor_state = st.session_state.editor_recepcion_bc
+    if not editor_state:
         return
 
-    bc_catalog = get_known_descriptions()
-    df = st.session_state.items_entry
+    df = st.session_state.items_entry.copy()
+    catalog = get_known_descriptions()
 
-    # Procesar solo las filas editadas
-    for row_idx_str, changes in state["edited_rows"].items():
-    for row_idx_str, changes in state["edited_rows"].items(): # type: ignore
-        row_idx = int(row_idx_str)
-        
-        # Si se editó el No. BC, buscamos la descripción
-        if "No. BC" in changes:
-            bc_val = str(changes["No. BC"]).strip().upper()
-            if bc_val in bc_catalog:
-                # Actualizamos directamente el DataFrame en session_state
-                # Esto es seguro porque sucede en el callback antes del render
-                df.at[row_idx, "Description"] = bc_catalog[bc_val]
-        # La lógica de autocompletado de descripción por No. BC se moverá al botón de registro.
-        # Aquí solo sincronizamos los cambios manuales del usuario.
-        
-        # Actualizar otros campos que el usuario editó para mantener sincronía
+    # 1. Sincronizar Ediciones (Cambios en celdas existentes)
+    for row_idx_str, changes in editor_state.get("edited_rows", {}).items():
+        idx = int(row_idx_str)
         for col, val in changes.items():
-            if col in df.columns:
-                df.at[row_idx, col] = val
+            df.at[idx, col] = val
+            # Si el usuario cambió el No. BC, autocompletamos la descripción
+            if col == "No. BC":
+                bc_val = str(val).strip().upper()
+                if bc_val in catalog:
+                    df.at[idx, "Description"] = catalog[bc_val]
 
-    # Manejar filas agregadas
-    if state.get("added_rows"):
-        for row in state["added_rows"]:
+    # 2. Manejar Filas Agregadas
+    if editor_state.get("added_rows"):
+        for row in editor_state["added_rows"]:
             bc_val = str(row.get("No. BC", "")).strip().upper()
-            if bc_val in bc_catalog and (not row.get("Description")):
-                row["Description"] = bc_catalog[bc_val]
+            if bc_val in catalog and not row.get("Description"):
+                row["Description"] = catalog[bc_val]
             
-            # Creamos un nuevo registro limpio
-            new_item = {col: row.get(col, None) for col in df.columns}
-            st.session_state.items_entry = pd.concat([df, pd.DataFrame([new_item])], ignore_index=True)
-        # Concatenamos las filas añadidas directamente, la descripción se llenará al guardar.
-        added_df = pd.DataFrame(state["added_rows"]) # type: ignore
-        st.session_state.items_entry = pd.concat([df, added_df], ignore_index=True)
+            new_row = {col: row.get(col, None) for col in df.columns}
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    # 3. Manejar Filas Eliminadas
+    if editor_state.get("deleted_rows"):
+        df = df.drop(index=editor_state["deleted_rows"]).reset_index(drop=True)
+
+    # Guardar el DataFrame maestro actualizado
+    st.session_state.items_entry = df
 
 def on_vd_change():
     """Callback para autocompletar descripciones en Venta Directa."""
-    state = st.session_state.editor_vd
-    if not state or not state.get("edited_rows"):
+    editor_state = st.session_state.editor_vd
+    if not editor_state:
         return
 
+    df = st.session_state.items_vd.copy()
     catalog = get_known_descriptions()
-    df = st.session_state.items_vd
 
-    for row_idx_str, changes in state["edited_rows"].items():
-        row_idx = int(row_idx_str)
-        
-        # Buscar por BC o por PT
-        match_key = None
-        if "No. BC" in changes: match_key = str(changes["No. BC"]).strip().upper()
-        elif "No. Parte (PT)" in changes: match_key = str(changes["No. Parte (PT)"]).strip().upper()
-
-        if match_key and match_key in catalog:
-            df.at[row_idx, "Descripcion"] = catalog[match_key]
-            
-        # Sincronizar cambios manuales
+    # Sincronizar ediciones
+    for row_idx_str, changes in editor_state.get("edited_rows", {}).items():
+        idx = int(row_idx_str)
         for col, val in changes.items():
-            if col in df.columns:
-                df.at[row_idx, col] = val
+            df.at[idx, col] = val
+            # Búsqueda dual por BC o PT
+            if col in ["No. BC", "No. Parte (PT)"]:
+                key = str(val).strip().upper()
+                if key in catalog:
+                    df.at[idx, "Descripcion"] = catalog[key]
 
-    # Manejar filas agregadas
-    if state.get("added_rows"):
-        for row in state["added_rows"]:
+    # Manejar adiciones
+    if editor_state.get("added_rows"):
+        for row in editor_state["added_rows"]:
             bc = str(row.get("No. BC", "")).strip().upper()
             pt = str(row.get("No. Parte (PT)", "")).strip().upper()
             match = bc if bc in catalog else (pt if pt in catalog else None)
             if match: row["Descripcion"] = catalog[match]
-            st.session_state.items_vd = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+            new_row = {col: row.get(col, None) for col in df.columns}
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    if editor_state.get("deleted_rows"):
+        df = df.drop(index=editor_state["deleted_rows"]).reset_index(drop=True)
+
+    st.session_state.items_vd = df
 
 def log_movement(item_id, accion, detalle, usuario="Almacenista"):
     """Registra un movimiento en la tabla de logs."""
@@ -662,21 +657,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 st.error("Para entradas de PC, completa el PC, Factura y agrega al menos un artículo.")
             else:
                 with st.spinner("Procesando entrada de PC..."):
-                    # (Lógica de procesamiento para entradas de PC)
-                    
-                    # --- NUEVA LÓGICA: Autocompletar descripciones antes de guardar ---
-                    bc_catalog = get_known_descriptions()
-                    df_items_entry = st.session_state.items_entry.copy() # Trabajar con una copia
-                    
-                    for index, row in df_items_entry.iterrows():
-                        bc_val = str(row.get("No. BC", "")).strip().upper()
-                        desc_val = str(row.get("Description", "")).strip()
-                        
-                        # Si No. BC tiene valor y la descripción está vacía, buscar en el catálogo
-                        if bc_val and bc_val != "NAN" and (not desc_val or desc_val.lower() == "nan"):
-                            if bc_val in bc_catalog:
-                                df_items_entry.at[index, "Description"] = bc_catalog[bc_val]
-                    # --- FIN NUEVA LÓGICA ---
+                    # El DataFrame en session_state ya está autocompletado gracias al callback
                  
                     new_rows = []
                     daily_log_rows = []
