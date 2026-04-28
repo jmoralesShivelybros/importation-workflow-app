@@ -1163,12 +1163,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             key='monitor_tv_auto_refresh'
         )
 
-        auto_refresh = st.checkbox(
-            "🔄 Auto-refrescar (Modo TV)",
-            value=st.session_state['monitor_tv_auto_refresh'],
-            key='monitor_tv_auto_refresh'
-        )
-
         refresh_delay = 10
         last_refresh = datetime.now().strftime("%H:%M:%S")
 
