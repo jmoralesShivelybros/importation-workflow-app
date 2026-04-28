@@ -1265,8 +1265,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 conn.close()
 
                 if not df_routes.empty:
-                    st.markdown("#### 🚚 Rutas en Tránsito / Recientes")
-
                     unique_routes = df_routes['route_id'].unique()
                     for r_id in unique_routes:
                         items_ruta = df_routes[df_routes['route_id'] == r_id]
