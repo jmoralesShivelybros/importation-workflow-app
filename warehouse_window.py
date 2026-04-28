@@ -1278,11 +1278,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 if conn: conn.close()
 
         if st.button("🔄 Refrescar ahora", key="tv_refresh_now", use_container_width=True):
-            st.experimental_rerun()
+            st.rerun()
 
         if auto_refresh:
             time.sleep(refresh_delay)
-            st.experimental_rerun()
+            st.rerun()
 
     # --- SECCIÓN: HISTORIAL ---
     elif section == "Historial":
