@@ -1192,16 +1192,26 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
         )
 
         # Métricas Generales
-        total_recibido = len(df_inventory[df_inventory["estatus"] == "Recibido"])
-        total_mesa = len(df_inventory[df_inventory["estatus"] == "En Mesa/Clasificado"])
-        total_por_entregar = len(df_inventory[df_inventory["estatus"] == "Etiquetado"])
+        total_routes_today = 0
+        conn_count = get_db_connection()
+        if conn_count:
+            try:
+                cursor_count = conn_count.cursor()
+                cursor_count.execute("SELECT COUNT(*) FROM routes WHERE DATE(timestamp) = CURDATE()")
+                total_routes_today = cursor_count.fetchone()[0] or 0
+            except Exception:
+                total_routes_today = 0
+            finally:
+                conn_count.close()
+
+        total_por_entregar = len(df_inventory[df_inventory["estatus"].astype(str).str.strip() == "Etiquetado"])
         total_inventario = df_inventory["cantidad"].sum() if not df_inventory.empty else 0
 
-        cols = st.columns(4, gap="large")
+        cols = st.columns(3, gap="large")
         for col, label, value in zip(
             cols,
-            ["En Recepción", "En Mesa", "Por Entregar", "Total Inventario"],
-            [total_recibido, total_mesa, total_por_entregar, f"{total_inventario:,.0f}"]
+            ["Rutas hoy", "Por Entregar", "Total Inventario"],
+            [total_routes_today, total_por_entregar, f"{total_inventario:,.0f}"]
         ):
             col.markdown(
                 f"<div class='monitor-tv-metric'><span class='monitor-tv-metric-label'>{label}</span><span class='monitor-tv-metric-value'>{value}</span></div>",
