@@ -1193,18 +1193,25 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
 
         # Métricas Generales
         total_routes_today = 0
+        total_por_entregar = 0
         conn_count = get_db_connection()
         if conn_count:
             try:
                 cursor_count = conn_count.cursor()
                 cursor_count.execute("SELECT COUNT(*) FROM routes WHERE DATE(timestamp) = CURDATE()")
                 total_routes_today = cursor_count.fetchone()[0] or 0
+
+                cursor_count.execute(
+                    "SELECT COUNT(DISTINCT inventory_item_id) FROM daily_logs "
+                    "WHERE status = 'Pendiente' AND inventory_item_id IS NOT NULL"
+                )
+                total_por_entregar = cursor_count.fetchone()[0] or 0
             except Exception:
                 total_routes_today = 0
+                total_por_entregar = 0
             finally:
                 conn_count.close()
 
-        total_por_entregar = len(df_inventory[df_inventory["estatus"].astype(str).str.strip() == "Etiquetado"])
         total_inventario = df_inventory["cantidad"].sum() if not df_inventory.empty else 0
 
         cols = st.columns(3, gap="large")
