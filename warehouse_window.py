@@ -1191,6 +1191,40 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             unsafe_allow_html=True,
         )
 
+        # Auto-scroll para pantalla TV
+        st.components.v1.html(
+            """
+            <script>
+                const scrollStep = 1;
+                const intervalMs = 50;
+                let direction = 1;
+                let pause = false;
+
+                function autoScroll() {
+                    if (pause) return;
+                    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+                    const current = window.scrollY;
+
+                    if (current >= maxScroll - 1) {
+                        direction = -1;
+                        pause = true;
+                        setTimeout(() => pause = false, 2000);
+                    } else if (current <= 0) {
+                        direction = 1;
+                        pause = true;
+                        setTimeout(() => pause = false, 2000);
+                    }
+
+                    window.scrollBy(0, scrollStep * direction);
+                }
+
+                setInterval(autoScroll, intervalMs);
+            </script>
+            """,
+            height=1,
+            scrolling=False,
+        )
+
         # Métricas Generales
         total_routes_today = 0
         total_por_entregar = 0
