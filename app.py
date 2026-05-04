@@ -67,7 +67,7 @@ def main():
         # 1. Selección del Módulo/Área
         module = st.selectbox(
             "Selecciona el área de trabajo",
-            ("Logística", "Almacenes"),
+            ("Logística", "Almacenes, Formularios"),
             on_change=set_main_view # Al cambiar de módulo, volvemos a la vista principal
         )
 
