@@ -94,6 +94,16 @@ def main():
             )
             st.session_state.app_mode = app_mode
 
+        elif module == "Formularios":
+            #
+            app_mode = st.radio(
+                "Acciones de formularios",
+                ("Generar Formulario Automovil",),
+                key="formularios_radio",
+                on_change=set_main_view
+            )
+            st.session_state.app_mode = app_mode
+
     # --- Lógica de renderizado principal ---
     # Damos prioridad a la vista de conversión si fue seleccionada
     if st.session_state.get('current_view') == "convertir_excel":
