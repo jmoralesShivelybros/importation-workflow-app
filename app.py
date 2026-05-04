@@ -78,7 +78,7 @@ def main():
         if module == "Logística":
             app_mode = st.radio(
                 "Acciones de Logística",
-                ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos", "Generar Formulario Automovil"),
+                ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos"),
                 key="logistica_radio", # Clave para el widget
                 on_change=set_main_view # Al cambiar de acción, volvemos a la vista principal
             )
