@@ -98,7 +98,7 @@ def main():
             #
             app_mode = st.radio(
                 "Acciones de formularios",
-                ("Generar Formulario Automovil",),
+                ("Registro de uso de vehiculo",),
                 key="formularios_radio",
                 on_change=set_main_view
             )
