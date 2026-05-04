@@ -14,6 +14,7 @@ from exportation_window import render_exportation_page
 from consumptions_report_window import render_consumptions_report_page
 from excel_to_txt_converter import render_excel_to_txt_page
 from warehouse_window import render_warehouse_page
+from auto_windows import render_auto_page
 # --- NUEVO: Importamos la lógica de datos del master, pero no la ventana ---
 # from master.master_data import MasterDataManager # Comentamos esta línea
 
@@ -77,7 +78,7 @@ def main():
         if module == "Logística":
             app_mode = st.radio(
                 "Acciones de Logística",
-                ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos"),
+                ("Generar Importación", "Generar Exportación", "Generar Carta de Norma", "Generar Reporte de Consumos", "Generar Formulario Automovil"),
                 key="logistica_radio", # Clave para el widget
                 on_change=set_main_view # Al cambiar de acción, volvemos a la vista principal
             )
@@ -115,6 +116,8 @@ def render_module_page(app_mode, folder_manager, week_num):
         render_norm_letter_page(folder_manager, week_num)
     elif app_mode == "Generar Reporte de Consumos":
         render_consumptions_report_page()
+    elif app_mode == "Generar Formulario Automovil":
+        render_auto_page(folder_manager, week_num)
     elif app_mode in ["Recepción de Material", "Gestión y Rutas", "Monitor TV", "Historial"]:
         render_warehouse_page(folder_manager, section=app_mode)
 
