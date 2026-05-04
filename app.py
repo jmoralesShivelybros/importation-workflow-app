@@ -14,7 +14,7 @@ from exportation_window import render_exportation_page
 from consumptions_report_window import render_consumptions_report_page
 from excel_to_txt_converter import render_excel_to_txt_page
 from warehouse_window import render_warehouse_page
-from auto_windows import render_auto_page
+from auto_window import render_auto_page
 # --- NUEVO: Importamos la lógica de datos del master, pero no la ventana ---
 # from master.master_data import MasterDataManager # Comentamos esta línea
 
