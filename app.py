@@ -126,7 +126,7 @@ def render_module_page(app_mode, folder_manager, week_num):
         render_norm_letter_page(folder_manager, week_num)
     elif app_mode == "Generar Reporte de Consumos":
         render_consumptions_report_page()
-    elif app_mode == "Generar Formulario Automovil":
+    elif app_mode == "Registro de uso de vehiculo":
         render_auto_page(folder_manager, week_num)
     elif app_mode in ["Recepción de Material", "Gestión y Rutas", "Monitor TV", "Historial"]:
         render_warehouse_page(folder_manager, section=app_mode)
