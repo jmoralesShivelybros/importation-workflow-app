@@ -1212,7 +1212,18 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             finally:
                 conn_count.close()
 
-        total_inventario = df_inventory["cantidad"].sum() if not df_inventory.empty else 0
+        # Calculamos el total de inventario filtrado por el mes actual
+        if not df_inventory.empty:
+            # Creamos una copia para no afectar el DataFrame original y aseguramos el formato de fecha
+            df_inv_tv = df_inventory.copy()
+            df_inv_tv['fecha_entrada'] = pd.to_datetime(df_inv_tv['fecha_entrada'])
+            
+            ahora = datetime.now()
+            # Filtramos registros que correspondan al mes y año en curso
+            mask = (df_inv_tv['fecha_entrada'].dt.month == ahora.month) & (df_inv_tv['fecha_entrada'].dt.year == ahora.year)
+            total_inventario = df_inv_tv.loc[mask, "cantidad"].sum()
+        else:
+            total_inventario = 0
 
         cols = st.columns(3, gap="large")
         for col, label, value in zip(
