@@ -1220,11 +1220,9 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             
             ahora = datetime.now()
             # Filtramos registros que correspondan al mes y año en curso
-            # Y que sigan en inventario (excluimos los que ya salieron)
             mask = (
                 (df_inv_tv['fecha_entrada'].dt.month == ahora.month) & 
-                (df_inv_tv['fecha_entrada'].dt.year == ahora.year) &
-                (~df_inv_tv['estatus'].isin(['Entregado a Planta', 'Entregado']))
+                (df_inv_tv['fecha_entrada'].dt.year == ahora.year)
             )
             total_inventario = df_inv_tv.loc[mask, "cantidad"].sum()
         else:
