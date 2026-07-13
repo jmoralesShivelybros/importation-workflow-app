@@ -11,7 +11,7 @@ import mysql.connector
 
 # --- Constantes ---
 
-PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "DRIVERA", "Ventas Directas", "Otro"]
+PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "JROMERO", "Ventas Directas", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
 ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
 
