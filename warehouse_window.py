@@ -595,7 +595,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     try:
                         df_excel = pd.read_excel(uploaded_file)
                         st.write("### Vista previa del archivo")
-                        st.dataframe(df_excel.head(), width="stretch")
+                        st.dataframe(df_excel.head(), use_container_width=True)
 
                         if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
                             with st.spinner("Procesando importación masiva..."):
@@ -1131,7 +1131,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     WHERE ri.route_id = {route['id']}
                                 """
                                 df_items = pd.read_sql_query(query_items, conn)
-                                st.dataframe(df_items, width="stretch")
+                                st.dataframe(df_items, use_container_width=True)
                     else:
                         st.info("No se encontraron rutas terminadas con los criterios seleccionados.")
 
@@ -1549,7 +1549,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     df_log['timestamp'] = pd.to_datetime(df_log['timestamp']).dt.strftime('%m/%d/%Y %I:%M %p')
                 except:
                     pass
-            st.dataframe(df_log, width="stretch")
+            st.dataframe(df_log, use_container_width=True)
             
             # Botón para descargar historial
             csv = df_log.to_csv(index=False).encode('utf-8')
