@@ -386,7 +386,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
-                    width="stretch",
+                    use_container_width=True,
                     on_change=on_recepcion_change,
                     column_order=["No. BC", "Description", "Shipper", "Qty"],
                     column_config={
@@ -419,7 +419,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.session_state.items_vd.reset_index(drop=True),
                     num_rows="dynamic",
                     hide_index=True,
-                    width="stretch",
+                    use_container_width=True,
                     on_change=on_vd_change,
                     column_order=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"],
                     column_config={
@@ -1484,7 +1484,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 key="editor_bitacora",
                 column_config=column_cfg,
                 num_rows="dynamic", # Permite agregar filas
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
                 on_change=update_daily_logs,
                 args=["editor_bitacora", "df_bitacora_snapshot"]
@@ -1508,7 +1508,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 df_ventas_directas,
                 key="editor_ventas_directas",
                 num_rows="dynamic",
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
                 column_config={
                     "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None, "inventory_item_id": None,
