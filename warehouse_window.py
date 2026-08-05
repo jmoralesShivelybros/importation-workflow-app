@@ -386,7 +386,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.session_state.items_entry,
                     num_rows="dynamic",
                     hide_index=True,
-                    use_container_width=True,
                     on_change=on_recepcion_change,
                     column_order=["No. BC", "Description", "Shipper", "Qty"],
                     column_config={
@@ -419,7 +418,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     st.session_state.items_vd.reset_index(drop=True),
                     num_rows="dynamic",
                     hide_index=True,
-                    use_container_width=True,
                     on_change=on_vd_change,
                     column_order=["No. Factura", "PC", "No. BC", "No. Parte (PT)", "Proveedor", "Descripcion", "Qty", "Comentarios"],
                     column_config={
@@ -538,7 +536,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     
                     if catalog_file:
                         df_cat = pd.read_excel(catalog_file)
-                        st.dataframe(df_cat.head(), use_container_width=True)
+                        st.dataframe(df_cat.head())
                         
                         if st.button("📥 Importar Catálogo", type="primary"):
                             conn = get_db_connection()
@@ -595,7 +593,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     try:
                         df_excel = pd.read_excel(uploaded_file)
                         st.write("### Vista previa del archivo")
-                        st.dataframe(df_excel.head(), use_container_width=True)
+                        st.dataframe(df_excel.head())
 
                         if st.button("🚀 Confirmar e Importar a Bitácora", type="primary", use_container_width=True):
                             with st.spinner("Procesando importación masiva..."):
@@ -840,7 +838,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             # Tabla con selección activada
             event = st.dataframe(
                 df_view[["id", "pc", "numero_parte", "descripcion", "programa", "estatus", "consecutivo"]],
-                use_container_width=True,
                 hide_index=True,
                 on_select="rerun",
                 selection_mode="multi-row"
@@ -857,7 +854,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 
                 st.write(f"Has seleccionado **{len(selected_df)} materiales** para mover.")
                 with st.expander("Ver detalles de la selección", expanded=False):
-                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], use_container_width=True)
+                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]])
 
                 # Campos para la ruta
                 st.markdown("#### 📍 Datos de la Ruta (Opcional)")
@@ -1011,7 +1008,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                         st.rerun()
                                 
                                 with st.expander("Ver contenido de la carga"):
-                                    st.dataframe(df_route_items, use_container_width=True)
+                                    st.dataframe(df_route_items)
                     else:
                         st.info("✅ No hay rutas pendientes. Todo ha sido entregado o no hay salidas activas.")
                 
@@ -1131,7 +1128,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                                     WHERE ri.route_id = {route['id']}
                                 """
                                 df_items = pd.read_sql_query(query_items, conn)
-                                st.dataframe(df_items, use_container_width=True)
+                                st.dataframe(df_items)
                     else:
                         st.info("No se encontraron rutas terminadas con los criterios seleccionados.")
 
@@ -1178,11 +1175,11 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 .monitor-tv-metric { background: #0f4c81; color: #ffffff; border-radius: 22px; padding: 24px 20px; text-align: center; margin-bottom: 16px; }
                 .monitor-tv-metric-label { font-size: 1.3rem; opacity: 0.9; margin-bottom: 10px; display: block; }
                 .monitor-tv-metric-value { font-size: 4.2rem; font-weight: 700; line-height: 1; }
-                .monitor-tv-route-card { border: 3px solid #0f4c81; border-radius: 24px; padding: 22px; margin-bottom: 24px; background: rgba(15, 76, 129, 0.08); }
-                .monitor-tv-route-title { font-size: 2.6rem; font-weight: 800; margin-bottom: 0.35rem; }
-                .monitor-tv-route-meta { font-size: 1.7rem; margin-bottom: 1rem; }
+                .monitor-tv-route-card { border: 3px solid #0f4c81; border-radius: 24px; padding: 22px; margin-bottom: 24px; background: rgba(15, 76, 129, 0.08); color: #000000; }
+                .monitor-tv-route-title { font-size: 2.6rem; font-weight: 800; margin-bottom: 0.35rem; color: #000000; }
+                .monitor-tv-route-meta { font-size: 1.7rem; margin-bottom: 1rem; color: #000000; }
                 .monitor-tv-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-                .monitor-tv-table th, .monitor-tv-table td { border: 1px solid #d3d3d3; padding: 14px 12px; font-size: 1.7rem; }
+                .monitor-tv-table th, .monitor-tv-table td { border: 1px solid #d3d3d3; padding: 14px 12px; font-size: 1.7rem; color: #000000; }
                 .monitor-tv-table th { background: rgba(15, 76, 129, 0.14); }
                 .monitor-tv-table td { background: #ffffff; }
                 .monitor-tv-small-button { font-size: 1.6rem; padding: 8px 16px; }
@@ -1484,7 +1481,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 key="editor_bitacora",
                 column_config=column_cfg,
                 num_rows="dynamic", # Permite agregar filas
-                use_container_width=True,
                 hide_index=True,
                 on_change=update_daily_logs,
                 args=["editor_bitacora", "df_bitacora_snapshot"]
@@ -1508,7 +1504,6 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 df_ventas_directas,
                 key="editor_ventas_directas",
                 num_rows="dynamic",
-                use_container_width=True,
                 hide_index=True,
                 column_config={
                     "id": None, "timestamp": None, "cantidad": None, "customer": None, "recepcion": None, "remision": None, "status": None, "inventory_item_id": None,
@@ -1549,7 +1544,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                     df_log['timestamp'] = pd.to_datetime(df_log['timestamp']).dt.strftime('%m/%d/%Y %I:%M %p')
                 except:
                     pass
-            st.dataframe(df_log, use_container_width=True)
+            st.dataframe(df_log)
             
             # Botón para descargar historial
             csv = df_log.to_csv(index=False).encode('utf-8')
