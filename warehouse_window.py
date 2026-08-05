@@ -840,7 +840,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
             # Tabla con selección activada
             event = st.dataframe(
                 df_view[["id", "pc", "numero_parte", "descripcion", "programa", "estatus", "consecutivo"]],
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
                 on_select="rerun",
                 selection_mode="multi-row"
@@ -857,7 +857,7 @@ def render_warehouse_page(folder_manager, section="Recepción de Material"):
                 
                 st.write(f"Has seleccionado **{len(selected_df)} materiales** para mover.")
                 with st.expander("Ver detalles de la selección", expanded=False):
-                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], width="stretch")
+                    st.dataframe(selected_df[["pc", "numero_parte", "descripcion", "estatus"]], use_container_width=True)
 
                 # Campos para la ruta
                 st.markdown("#### 📍 Datos de la Ruta (Opcional)")
