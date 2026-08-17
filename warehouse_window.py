@@ -11,9 +11,9 @@ import mysql.connector
 
 # --- Constantes ---
 
-PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENES", "MFUENTES", "DCEPEDA", "JROMERO", "Ventas Directas", "Otro"]
+PROGRAMAS = ["LCHARLES", "DCHARLES", "EJIMENEZ", "MFUENTES", "DCEPEDA", "JROMERO", "Ventas Directas", "Otro"]
 ESTATUS_OPCIONES = ["Recibido", "En Mesa/Clasificado", "Etiquetado", "En proceso de entrega", "Entregado a Planta"]
-ALMACENISTAS = ["Fernando Gomez", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
+ALMACENISTAS = ["Mauricio Malacara", "Nahum Prettel", "Juan Hinojosa", "Administrador Javier morales"]
 
 def run_backup(backup_dir, is_manual=False):
     """Genera un archivo Excel con todas las tablas de la base de datos como respaldo."""
