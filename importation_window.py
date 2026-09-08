@@ -2,13 +2,15 @@
 
 import streamlit as st
 import pytesseract
-from pdf2image import convert_from_bytes
+import pymupdf
 import re
 import sys
 import os
+import shutil
 import cv2 # Importa la librería OpenCV
 import numpy as np
 from io import BytesIO # Para manejar imágenes en memoria
+from PIL import Image
 # --- IA DE GOOGLE ---
 import google.generativeai as genai
 import pandas as pd # Importamos pandas para exportar a Excel
@@ -25,6 +27,10 @@ def _configure_tesseract():
         base_path = get_base_path()
         tesseract_path = os.path.join(base_path, 'vendor', 'Tesseract-OCR', 'tesseract.exe')
         if os.path.exists(tesseract_path):
+            pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    else:
+        tesseract_path = shutil.which("tesseract")
+        if tesseract_path:
             pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 def get_base_path():
@@ -46,20 +52,15 @@ def extract_data_from_pdf_logic(pdf_file):
         """
         text = ""
         try:
-            poppler_path = _get_poppler_path()
-            # En la nube de Streamlit, poppler_path será None, lo cual está bien
-            # porque poppler-utils lo pone en el PATH del sistema.
-            if sys.platform == "win32" and not poppler_path:
-                # Si no se encontró Poppler, devuelve un error claro. (Adaptado para Streamlit)
-                return {"error": "No se encontró la carpeta de Poppler en el directorio 'vendor'."}, ""
-
-            # 1. Convierte la primera página del PDF a una imagen con mayor resolución (DPI)
-            images = convert_from_bytes(
-                pdf_file.getvalue(),
-                # Solo pasamos la ruta si estamos en Windows y la encontramos.
-                poppler_path=poppler_path if sys.platform == "win32" else None,
-                dpi=300  # Aumentamos la resolución para mejorar la calidad
-            )
+            # Renderiza el PDF sin depender de binarios del sistema como Poppler.
+            document = pymupdf.open(stream=pdf_file.getvalue(), filetype="pdf")
+            scale = 300 / 72
+            matrix = pymupdf.Matrix(scale, scale)
+            images = []
+            for page in document:
+                pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+                images.append(Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples))
+            document.close()
             if not images:
                 return {"error": "No se pudo convertir el PDF a imagen."}, ""
 
@@ -86,10 +87,10 @@ def extract_data_from_pdf_logic(pdf_file):
             #    --psm 3: Totalmente automático, bueno para diseños variados.
             #    --psm 11: Trata la imagen como un único bloque de texto disperso.
             custom_config = r'--oem 3 --psm 3 -l spa'
-            text = pytesseract.image_to_string(thresh_image_for_ocr, config=custom_config)
-
-            if not text:
-                return {"error": "OCR no pudo extraer texto de la imagen del PDF."}, ""
+            if shutil.which("tesseract") or sys.platform == "win32":
+                text = pytesseract.image_to_string(thresh_image_for_ocr, config=custom_config)
+            else:
+                text = ""
 
         except Exception as e:
             return {"error": f"Error en OCR o conversión de PDF: {e}"}, ""

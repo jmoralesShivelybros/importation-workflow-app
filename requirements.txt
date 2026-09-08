@@ -6,6 +6,7 @@ pdfplumber
 pypdf
 reportlab
 pdf2image
+pymupdf
 pytesseract
 opencv-python-headless
 google-generativeai
