@@ -1,10 +1,11 @@
 import pytesseract
 from pdf2image import convert_from_path
 import re
+import shutil
 
-# --- ¡IMPORTANTE! ---
-# Asegúrate de que Tesseract-OCR esté instalado en esta ruta.
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+tesseract_path = shutil.which("tesseract")
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 def extract_data_from_pdf(pdf_path):
     """
